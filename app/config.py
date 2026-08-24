@@ -27,6 +27,14 @@ class AppSettings(CommonSettings):
     max_tool_calls_per_run: int = 25
     max_proposals_per_run: int = 10
 
+    #: Stripe refuses a back-dated due_date, so a genuinely 95-days-overdue invoice can
+    #: only exist in test mode on a test clock -- and clock objects are omitted from
+    #: unfiltered list calls. With this on, the overdue query is additionally run scoped to
+    #: each test-clock customer, with the identical server-side status and due_date
+    #: filters. It is what makes scripts/seed_stripe_test_data.py visible to the agent.
+    #: Harmless in live mode, where no test clocks exist. See knowledge-base note 04.
+    stripe_include_test_clock_invoices: bool = True
+
     #: Upper bound on a single agent run, so a wedged run cannot hold a worker forever.
     run_timeout_seconds: float = 600.0
     gateway_timeout_seconds: float = 30.0

@@ -26,9 +26,9 @@ from shared.approval_token import ApprovalTokenClaims, mint  # noqa: E402
 from shared.audit import verify_chain  # noqa: E402
 from shared.clock import now_utc, seconds_from_now  # noqa: E402
 from shared.db import session_scope  # noqa: E402
-from shared.schema import ensure_schema  # noqa: E402
 from shared.hashing import hash_payload  # noqa: E402
 from shared.models import Approval, OutboxMessage, Proposal, Run  # noqa: E402
+from shared.schema import ensure_schema  # noqa: E402
 
 GATEWAY = os.environ.get("GATEWAY_URL", "http://gateway:9000")
 SECRET = os.environ["APPROVAL_SIGNING_SECRET"]
