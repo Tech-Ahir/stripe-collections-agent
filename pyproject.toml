@@ -1,0 +1,50 @@
+[project]
+name = "stripe-collections-agent"
+version = "0.1.0"
+description = "Collections agent with a human-approval boundary. The agent drafts; only an approved proposal can send."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi~=0.141",
+    "uvicorn[standard]~=0.52",
+    "sqlalchemy~=2.0.52",
+    "pydantic~=2.13",
+    "pydantic-settings~=2.15",
+    "jinja2~=3.1",
+    "python-multipart~=0.0.32",
+    "httpx~=0.28",
+    "anthropic~=1.0",
+    "stripe~=15.5",
+    "sse-starlette~=3.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest~=9.1",
+    "import-linter~=2.13",
+    "ruff~=0.16",
+    "pyyaml~=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "gateway", "shared"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error::DeprecationWarning:app.*", "error::DeprecationWarning:gateway.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# UP047 wants PEP 695 generics (`def f[T](...)`), which are 3.12-only syntax. The runtime
+# is 3.12, but keeping the source importable on 3.11 costs nothing and lets a contributor
+# run the suite against a system Python without a matching minor version. Everything else
+# in the UP family is on.
+ignore = ["UP047"]

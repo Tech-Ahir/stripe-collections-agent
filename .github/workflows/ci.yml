@@ -1,0 +1,86 @@
+name: CI
+
+# The boundary is enforced here, not only by convention. `lint-imports` is what stops a
+# future contributor from erasing the credential split with a single convenient import,
+# and the refusal suite is what stops the gateway from being talked into acting.
+#
+# If a change makes a refusal test fail, the change is wrong -- not the test.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies from the lock file
+        run: uv pip install --system -r requirements-dev.txt
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Import boundary contracts (CLAUDE.md rule 3)
+        run: lint-imports
+
+      - name: Tests
+        env:
+          APPROVAL_SIGNING_SECRET: ci-secret-0000000000000000000000000000000000
+        run: pytest -q
+
+  compose:
+    # Proves the promise in the README: `docker compose up` brings the system up with no
+    # host dependencies beyond Docker, and the gateway is unreachable from outside.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write a .env sufficient to boot
+        run: |
+          cat > .env <<'EOF'
+          STRIPE_API_KEY_READ=rk_test_ci_placeholder
+          ANTHROPIC_API_KEY=
+          APPROVAL_SIGNING_SECRET=ci-secret-0000000000000000000000000000000000
+          EMAIL_ADAPTER=outbox
+          EOF
+
+      - name: Bring the system up
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      - name: The public API is reachable
+        run: curl -fsS http://localhost:8000/healthz | tee /dev/stderr | grep -q '"service":"app"'
+
+      - name: The gateway is NOT reachable from the host (acceptance criterion 7)
+        run: |
+          if curl -sS --max-time 5 http://localhost:9000/healthz; then
+            echo "FAIL: the gateway answered on the host. It must publish no port."
+            exit 1
+          fi
+          echo "OK: connection to localhost:9000 refused, as designed."
+
+      - name: The gateway IS reachable on the internal network
+        run: docker compose exec -T app python -c "import urllib.request; print(urllib.request.urlopen('http://gateway:9000/healthz', timeout=5).status)"
+
+      - name: Full suite inside the container
+        run: docker compose run --rm tests
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

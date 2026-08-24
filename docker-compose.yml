@@ -1,0 +1,87 @@
+# Two processes, two credential sets, one crossing point.
+#
+# The single most important line in this file is the one that is missing: the `gateway`
+# service has no `ports:` key. It is reachable only on the internal Docker network, so
+# `curl localhost:9000` from the host is refused. That is the architectural boundary made
+# physical, and it is the first thing to show a reviewer.
+
+name: stripe-collections-agent
+
+services:
+  app:
+    # AGENT SERVICE. Can read from Stripe and think. Cannot act.
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    ports:
+      - "8000:8000" # public: the web test UI and the /v1 API
+    environment:
+      DATABASE_URL: sqlite:////data/collections.db
+      STRIPE_API_KEY_READ: ${STRIPE_API_KEY_READ:?set STRIPE_API_KEY_READ in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      APPROVAL_SIGNING_SECRET: ${APPROVAL_SIGNING_SECRET:?set APPROVAL_SIGNING_SECRET in .env}
+      GATEWAY_URL: http://gateway:9000
+      PROPOSAL_TTL_HOURS: ${PROPOSAL_TTL_HOURS:-72}
+      MAX_TOOL_CALLS_PER_RUN: ${MAX_TOOL_CALLS_PER_RUN:-25}
+      MAX_PROPOSALS_PER_RUN: ${MAX_PROPOSALS_PER_RUN:-10}
+      OPERATOR_ID: ${OPERATOR_ID:-operator@servicia.ai}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Deliberately absent: STRIPE_API_KEY_WRITE, SMTP_PASSWORD, RESEND_API_KEY.
+      # app/guards.py refuses to start the service if any of them appear here.
+    volumes:
+      - appdata:/data
+    depends_on:
+      gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    # ACTION GATEWAY. Can act on the outside world. Cannot be persuaded.
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
+    # NO ports: -- internal network only. This is the boundary. Do not add one.
+    environment:
+      DATABASE_URL: sqlite:////data/collections.db
+      STRIPE_API_KEY_WRITE: ${STRIPE_API_KEY_WRITE:-}
+      ENABLE_STRIPE_INVOICE_SEND: ${ENABLE_STRIPE_INVOICE_SEND:-false}
+      APPROVAL_SIGNING_SECRET: ${APPROVAL_SIGNING_SECRET:?set APPROVAL_SIGNING_SECRET in .env}
+      EMAIL_ADAPTER: ${EMAIL_ADAPTER:-outbox}
+      OUTBOX_DIR: /data/outbox
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-collections@servicia.ai}
+      PROPOSAL_TTL_HOURS: ${PROPOSAL_TTL_HOURS:-72}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - appdata:/data
+    restart: unless-stopped
+
+  tests:
+    # The only image containing both services, because the boundary tests import each
+    # side to prove they stay apart. Behind a profile, so `docker compose up` never
+    # starts it.
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/tests.Dockerfile
+    environment:
+      DATABASE_URL: sqlite:////tmp/test.db
+      APPROVAL_SIGNING_SECRET: ${APPROVAL_SIGNING_SECRET:-test-secret-0000000000000000000000000000}
+      GATEWAY_URL: http://gateway:9000
+
+  mailpit:
+    # Optional: a real SMTP send with a real inbox and no external delivery.
+    #   docker compose --profile smtp up -d      then set EMAIL_ADAPTER=smtp
+    profiles: ["smtp"]
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # web inbox
+    restart: unless-stopped
+
+volumes:
+  appdata:

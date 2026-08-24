@@ -1,0 +1,75 @@
+# The import boundary, made mechanical.
+#
+# Rule 3 of CLAUDE.md says the agent service may not import the email adapter or the
+# write-capable Stripe client. A comment cannot enforce that; this file can. Run with
+# `lint-imports`. It runs in CI on every push.
+#
+# Contracts 2 and 3 are subsumed by contract 1, and are written out anyway: the contract
+# NAMES are documentation a reviewer reads, and each one answers a specific question the
+# brief asks.
+
+[importlinter]
+root_packages =
+    app
+    gateway
+    shared
+include_external_packages = True
+
+[importlinter:contract:1]
+name = The agent service cannot import the action gateway
+type = forbidden
+source_modules =
+    app
+forbidden_modules =
+    gateway
+
+[importlinter:contract:2]
+name = The agent service cannot import the email adapter
+type = forbidden
+source_modules =
+    app
+forbidden_modules =
+    gateway.email_adapter
+
+[importlinter:contract:3]
+name = The agent service cannot import the write-capable Stripe client
+type = forbidden
+source_modules =
+    app
+forbidden_modules =
+    gateway.stripe_client.write
+
+[importlinter:contract:4]
+name = The gateway cannot import the agent service
+type = forbidden
+source_modules =
+    gateway
+forbidden_modules =
+    app
+
+[importlinter:contract:5]
+name = Shared code depends on neither service
+type = forbidden
+source_modules =
+    shared
+forbidden_modules =
+    app
+    gateway
+
+[importlinter:contract:6]
+name = The agent subsystem cannot mint approval tokens or call the gateway
+type = forbidden
+source_modules =
+    app.agent
+forbidden_modules =
+    app.approval
+    app.gateway_client
+
+[importlinter:contract:7]
+name = Only the gateway may import smtplib
+type = forbidden
+source_modules =
+    app
+    shared
+forbidden_modules =
+    smtplib

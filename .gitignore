@@ -1,0 +1,35 @@
+# Secrets — never commit. The real keys live only in .env, which stays local.
+.env
+.env.*
+!.env.example
+
+# Local data volume / SQLite / captured outbox
+/data/
+data/
+*.db
+*.db-wal
+*.db-shm
+outbox/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+uv.lock.bak
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Obsidian local workspace state (the vault itself IS committed)
+knowledge-base/.obsidian/workspace*.json
+knowledge-base/.obsidian/cache

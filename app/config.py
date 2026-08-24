@@ -1,0 +1,37 @@
+"""Agent-service settings.
+
+Note what is absent: there is no field for a write-capable Stripe key, no SMTP settings
+and no Resend key. This class *cannot* read them. That is the credential split expressed
+in the type system rather than in a comment.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from shared.config import CommonSettings
+
+
+class AppSettings(CommonSettings):
+    #: Restricted key. Read-only on Invoices, Customers, Charges.
+    stripe_api_key_read: str = ""
+
+    anthropic_api_key: str = ""
+
+    #: Section 3 names Claude Sonnet. Overridable so a different tier is a config change.
+    anthropic_model: str = "claude-sonnet-5"
+
+    #: The only crossing point. Resolved on the internal Docker network.
+    gateway_url: str = "http://gateway:9000"
+
+    max_tool_calls_per_run: int = 25
+    max_proposals_per_run: int = 10
+
+    #: Upper bound on a single agent run, so a wedged run cannot hold a worker forever.
+    run_timeout_seconds: float = 600.0
+    gateway_timeout_seconds: float = 30.0
+
+
+@lru_cache(maxsize=1)
+def settings() -> AppSettings:
+    return AppSettings()

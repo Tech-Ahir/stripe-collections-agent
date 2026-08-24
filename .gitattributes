@@ -1,0 +1,7 @@
+# This repository is built and run in Linux containers. Keep line endings LF everywhere,
+# including in a Windows working tree, so shell scripts and Dockerfiles are never checked
+# out with CRLF and silently broken.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
