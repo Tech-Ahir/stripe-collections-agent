@@ -13,10 +13,14 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
+from app.api.v1 import router as v1_router
 from app.config import settings
 from app.guards import assert_no_action_credentials
+from app.web.routes import router as web_router
+from shared.errors import ApiError
 from shared.schema import init_schema_and_audit
 
 log = logging.getLogger("app")
@@ -34,7 +38,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     init_schema_and_audit(service=SERVICE, version=VERSION)
     log.info("agent service ready; gateway at %s", settings().gateway_url)
-    yield
+    try:
+        yield
+    finally:
+        from app import runner
+
+        runner.shutdown()
 
 
 app = FastAPI(
@@ -49,6 +58,20 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
 )
+
+
+app.include_router(v1_router)
+app.include_router(web_router)
+
+
+@app.exception_handler(ApiError)
+async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
+    """Section 6's error envelope, with the code intact.
+
+    Gateway refusal codes reach the operator unchanged, because the refusal is the feature.
+    """
+    log.info("api error: %s (%s)", exc.code, exc.message)
+    return JSONResponse(status_code=exc.http_status, content=exc.envelope())
 
 
 async def _probe_gateway() -> dict[str, Any]:

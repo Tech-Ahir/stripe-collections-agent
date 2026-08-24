@@ -39,6 +39,15 @@ class AppSettings(CommonSettings):
     run_timeout_seconds: float = 600.0
     gateway_timeout_seconds: float = 30.0
 
+    #: How many agent runs may execute at once. Two is plenty for one operator, and it
+    #: keeps SQLite write contention where the retry logic can absorb it.
+    max_concurrent_runs: int = 2
+
+    #: Section 9 requires a "Try to send without approval" button, which is step 4 of the
+    #: handoff demo. It mints a correctly signed token for a PENDING proposal so the gateway
+    #: refuses it at check 4 rather than at the signature check. See app/approval/probe.py.
+    enable_unapproved_attempt_demo: bool = True
+
 
 @lru_cache(maxsize=1)
 def settings() -> AppSettings:

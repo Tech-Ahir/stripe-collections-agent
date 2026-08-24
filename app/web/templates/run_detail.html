@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id[:8] }} · Collections Agent{% endblock %}
+{% block content %}
+
+<div class="mb-4 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+  <h1 class="text-sm font-semibold">Run <span class="mono">{{ run.id[:8] }}…</span></h1>
+  <span id="run-status">{% include "partials/run_status.html" %}</span>
+  <span class="text-xs text-slate-500">
+    <span id="tool-count" class="tabular-nums">{{ run.tool_calls }}</span> tool calls ·
+    <span id="proposal-count" class="tabular-nums">{{ run.proposals }}</span> proposals
+  </span>
+  {% if run.pending_proposals %}
+    <a href="/proposals" class="ml-auto rounded bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600">
+      Review {{ run.pending_proposals }} in the queue &rarr;
+    </a>
+  {% endif %}
+</div>
+
+<p class="mb-4 rounded border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+  <span class="text-xs font-medium uppercase tracking-wide text-slate-400">Goal</span><br>
+  {{ run.goal }}
+</p>
+
+{% if run.error %}
+<div class="mb-4 rounded border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+  <strong class="font-semibold">The run stopped.</strong> {{ run.error }}
+  <div class="mt-1 text-xs text-rose-700">
+    The transcript below is what it completed before stopping.
+  </div>
+</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+
+  {# --- The transcript ---------------------------------------------------------- #}
+  <section class="lg:col-span-2 rounded border border-slate-200 bg-white">
+    <div class="border-b border-slate-200 px-5 py-3">
+      <h2 class="text-sm font-semibold">Transcript</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        Every tool call the agent made, in the order it chose. Each carries a
+        <span class="rounded bg-sky-100 px-1 text-sky-800">READ</span> or
+        <span class="rounded bg-violet-100 px-1 text-violet-800">DRAFT</span> chip.
+        <strong>There is no ACTION chip, and its absence is the point:</strong> the agent has
+        no tool that reaches the outside world.
+      </p>
+    </div>
+
+    <ol id="transcript" class="divide-y divide-slate-100">
+      {% for step in run.transcript %}
+        {% include "partials/step.html" %}
+      {% endfor %}
+    </ol>
+
+    <div id="stream-end" class="px-5 py-3 text-xs text-slate-400">
+      {% if run.status in ('queued', 'running') %}
+        <span class="animate-pulse">watching for the next step…</span>
+      {% else %}
+        End of transcript.
+      {% endif %}
+    </div>
+  </section>
+
+  {# --- Proposals as they appear ------------------------------------------------- #}
+  <aside class="rounded border border-slate-200 bg-white">
+    <div class="border-b border-slate-200 px-5 py-3">
+      <h2 class="text-sm font-semibold">Proposals from this run</h2>
+      <p class="mt-1 text-xs text-slate-500">Each one is waiting for a human. Nothing has been sent.</p>
+    </div>
+    <div id="run-proposals"
+         hx-get="/ui/runs/{{ run.id }}/proposals"
+         hx-trigger="{% if run.status in ('queued', 'running') %}every 2s{% else %}none{% endif %}"
+         hx-swap="innerHTML">
+      {% include "partials/run_proposals.html" %}
+    </div>
+  </aside>
+</div>
+
+<script>
+// The transcript streams over SSE. The endpoint tails the database, so `after` lets a
+// reconnecting browser resume exactly where it left off with nothing lost.
+(function () {
+  const list = document.getElementById("transcript");
+  const endMarker = document.getElementById("stream-end");
+  const status = "{{ run.status }}";
+  if (status !== "queued" && status !== "running") return;
+
+  let lastSeq = {{ run.transcript | length and run.transcript[-1].seq or 0 }};
+  const source = new EventSource("/v1/runs/{{ run.id }}/stream?after=" + lastSeq);
+
+  const CHIP = { READ: "bg-sky-100 text-sky-800", DRAFT: "bg-violet-100 text-violet-800" };
+
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value == null ? "" : String(value);
+    return div.innerHTML;
+  }
+
+  source.addEventListener("step", function (message) {
+    const step = JSON.parse(message.data);
+    lastSeq = step.seq;
+    const item = document.createElement("li");
+    item.className = "px-5 py-3 text-sm";
+
+    if (step.type === "thought") {
+      item.innerHTML =
+        '<div class="text-xs uppercase tracking-wide text-slate-400">reasoning</div>' +
+        '<p class="mt-1 italic text-slate-700">' + escapeHtml(step.payload.text) + "</p>";
+    } else if (step.type === "message") {
+      item.innerHTML =
+        '<div class="text-xs uppercase tracking-wide text-slate-400">summary</div>' +
+        '<p class="mt-1 whitespace-pre-wrap text-slate-800">' + escapeHtml(step.payload.text) + "</p>";
+    } else if (step.type === "tool_call") {
+      const chip = CHIP[step.tool_class] || "bg-slate-100 text-slate-700";
+      item.innerHTML =
+        '<div class="flex items-baseline gap-2">' +
+        '<span class="rounded px-1.5 text-xs font-medium ' + chip + '">' + escapeHtml(step.tool_class) + "</span>" +
+        '<span class="mono text-slate-900">' + escapeHtml(step.tool_name) + "</span></div>" +
+        '<pre class="mt-1 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-600">' +
+        escapeHtml(JSON.stringify(step.payload.arguments)) + "</pre>";
+    } else {
+      const failed = step.payload.is_error;
+      item.innerHTML =
+        '<details><summary class="cursor-pointer text-xs ' +
+        (failed ? "text-rose-700" : "text-slate-500") + '">' +
+        (failed ? "refused" : "result") + " · " + escapeHtml(step.tool_name) + "</summary>" +
+        '<pre class="mt-1 max-h-64 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-600">' +
+        escapeHtml(JSON.stringify(step.payload.result, null, 2)) + "</pre></details>";
+    }
+    list.appendChild(item);
+    endMarker.scrollIntoView({ behavior: "smooth", block: "end" });
+  });
+
+  source.addEventListener("done", function (message) {
+    const done = JSON.parse(message.data);
+    source.close();
+    endMarker.textContent =
+      "Run " + done.status.replace(/_/g, " ") + " · " + done.tool_calls +
+      " tool calls · " + done.proposals + " proposals." +
+      (done.proposals ? " Nothing has been sent; review them in the queue." : "");
+    endMarker.className = "px-5 py-3 text-xs text-slate-600";
+    setTimeout(function () { window.location.reload(); }, 900);
+  });
+
+  source.onerror = function () {
+    endMarker.textContent = "Stream interrupted. Reload to resume from where it stopped.";
+  };
+})();
+</script>
+{% endblock %}

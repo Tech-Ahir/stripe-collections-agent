@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Approval queue · Collections Agent{% endblock %}
+{% block content %}
+
+<div class="grid gap-6 lg:grid-cols-[22rem_1fr]">
+
+  {# --- Left: the queue, sorted by amount descending (section 9) ---------------- #}
+  <aside class="rounded border border-slate-200 bg-white">
+    <div class="border-b border-slate-200 px-4 py-3">
+      <h1 class="text-sm font-semibold">Approval queue</h1>
+      <div class="mt-2 flex gap-1 text-xs">
+        {% for option in ['pending', 'all'] %}
+          <a href="/proposals?status={{ option }}"
+             class="rounded px-2 py-0.5 {% if status_filter == option %}bg-slate-900 text-white{% else %}bg-slate-100 text-slate-700 hover:bg-slate-200{% endif %}">
+            {{ option }}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if queue %}
+    <ul class="divide-y divide-slate-100">
+      {% for p in queue %}
+      <li>
+        <a href="/proposals?selected={{ p.id }}&status={{ status_filter }}"
+           class="block px-4 py-3 hover:bg-slate-50 {% if detail and detail.id == p.id %}bg-slate-50 border-l-2 border-slate-900{% endif %}">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="truncate text-sm font-medium">{{ p.customer_name or p.customer_email }}</span>
+            <span class="shrink-0 text-sm tabular-nums">{{ p.amount_display }}</span>
+          </div>
+          <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="rounded px-1.5
+              {% if p.tone == 'friendly' %}bg-emerald-50 text-emerald-800
+              {% elif p.tone == 'firm' %}bg-amber-50 text-amber-800
+              {% else %}bg-rose-50 text-rose-800{% endif %}">{{ p.tone }}</span>
+            <span class="text-slate-500">{{ p.days_overdue }}d overdue</span>
+            {% if p.status != 'pending' %}
+              <span class="rounded bg-slate-100 px-1.5 text-slate-600">{{ p.status }}</span>
+            {% endif %}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="px-4 py-6 text-sm text-slate-500">
+      Nothing {{ 'pending' if status_filter == 'pending' else 'here' }}.
+      <a href="/" class="text-blue-700 hover:underline">Start a run</a>.
+    </p>
+    {% endif %}
+  </aside>
+
+  {# --- Right: the selected proposal --------------------------------------------- #}
+  <section>
+  {% if detail %}
+    {# Rationale FIRST -- section 9: "the agent's rationale first, then invoice facts,
+       then payment history, then the letter". #}
+    <div class="rounded border border-slate-200 bg-white">
+      <div class="border-b border-slate-200 px-5 py-4">
+        <div class="flex flex-wrap items-baseline gap-x-3">
+          <h2 class="text-sm font-semibold">{{ detail.customer_name or detail.customer_email }}</h2>
+          <span class="text-sm tabular-nums">{{ detail.amount_display }}</span>
+          <span class="rounded px-1.5 text-xs
+            {% if detail.tone == 'friendly' %}bg-emerald-50 text-emerald-800
+            {% elif detail.tone == 'firm' %}bg-amber-50 text-amber-800
+            {% else %}bg-rose-50 text-rose-800{% endif %}">{{ detail.tone }}</span>
+          <span class="text-xs text-slate-500">{{ detail.days_overdue }} days overdue</span>
+          <span class="ml-auto rounded px-2 py-0.5 text-xs
+            {% if detail.status == 'pending' %}bg-amber-50 text-amber-800
+            {% elif detail.status == 'executed' %}bg-emerald-50 text-emerald-800
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {% if detail.status == 'pending' %}awaiting approval{% else %}{{ detail.status }}{% endif %}
+          </span>
+        </div>
+
+        <div class="mt-3 rounded bg-slate-50 px-3 py-2">
+          <div class="text-xs font-medium uppercase tracking-wide text-slate-400">Why this invoice, this tone</div>
+          <p class="mt-1 text-sm text-slate-800">{{ detail.rationale }}</p>
+        </div>
+      </div>
+
+      {# --- Invoice facts, then payment history ---------------------------------- #}
+      <div class="grid gap-px bg-slate-100 sm:grid-cols-2">
+        <dl class="bg-white px-5 py-4 text-sm">
+          <div class="text-xs font-medium uppercase tracking-wide text-slate-400">Invoice facts</div>
+          <div class="mt-2 space-y-1">
+            {% for label, key in [
+              ('Invoice', 'invoice_number'), ('Amount', 'amount_display'),
+              ('Due', 'due_date'), ('Days overdue', 'days_overdue'),
+              ('Recipient', 'customer_email')
+            ] %}
+            <div class="flex justify-between gap-3">
+              <dt class="text-slate-500">{{ label }}</dt>
+              <dd class="mono text-right">{{ detail.invoice_facts.get(key) }}</dd>
+            </div>
+            {% endfor %}
+            <div class="flex justify-between gap-3">
+              <dt class="text-slate-500">Payment link</dt>
+              <dd class="truncate text-right">
+                <a class="text-blue-700 hover:underline" target="_blank" rel="noopener"
+                   href="{{ detail.invoice_facts.get('hosted_invoice_url') }}">hosted invoice</a>
+              </dd>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-slate-400">
+            These are the values the tool layer retrieved. Every figure in the letter is
+            checked against them, so nothing in it was recalled by the model.
+          </p>
+        </dl>
+
+        <div class="bg-white px-5 py-4 text-sm">
+          <div class="text-xs font-medium uppercase tracking-wide text-slate-400">Integrity</div>
+          <div class="mt-2 space-y-1">
+            <div class="flex justify-between gap-3">
+              <span class="text-slate-500">Payload hash</span>
+              <span class="mono truncate text-right text-xs" title="{{ detail.payload_hash }}">{{ detail.payload_hash[7:23] }}…</span>
+            </div>
+            <div class="flex justify-between gap-3">
+              <span class="text-slate-500">Expires</span>
+              <span class="text-right text-xs">{{ detail.expires_at.strftime('%d %b %H:%M') }}</span>
+            </div>
+            <div class="flex justify-between gap-3">
+              <span class="text-slate-500">From run</span>
+              <span class="text-right text-xs">
+                <a class="text-blue-700 hover:underline" href="/runs/{{ detail.run_id }}">{{ detail.run_id[:8] }}…</a>
+              </span>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-slate-400">
+            The gateway re-hashes this letter and compares. Approving one letter cannot be
+            used to send a different one.
+          </p>
+          {% if detail.executions %}
+          <div class="mt-3 rounded bg-slate-50 p-2 text-xs">
+            {% for ex in detail.executions %}
+              <div>execution {{ ex.id }} · {{ ex.status }}{% if ex.error %} · {{ ex.error }}{% endif %}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# --- The letter ----------------------------------------------------------- #}
+      <div class="border-t border-slate-200 px-5 py-4">
+        <div class="flex items-baseline justify-between">
+          <div class="text-xs font-medium uppercase tracking-wide text-slate-400">The letter</div>
+          <div class="text-xs text-slate-500">Subject: {{ detail.subject }}</div>
+        </div>
+
+        {% if detail.status == 'pending' %}
+        <form id="letter-form">
+          <textarea name="body" id="letter-body" rows="16"
+            class="mono mt-2 w-full rounded border border-slate-300 p-3 text-xs leading-relaxed">{{ detail.body }}</textarea>
+          <p class="mt-1 text-xs text-slate-500">
+            You may edit this before approving. Saving an edit
+            <strong>invalidates any prior hash</strong>, and approving mints the token from
+            what you see here &mdash; so you approve what you actually read.
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button"
+              hx-post="/ui/proposals/{{ detail.id }}/approve"
+              hx-include="#letter-body, #approve-note"
+              hx-target="#decision" hx-swap="innerHTML"
+              class="rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+              Approve &amp; send
+            </button>
+
+            <button type="button"
+              hx-post="/ui/proposals/{{ detail.id }}/edit"
+              hx-include="#letter-body"
+              hx-target="#decision" hx-swap="innerHTML"
+              class="rounded border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">
+              Save edit
+            </button>
+
+            <button type="button"
+              hx-post="/ui/proposals/{{ detail.id }}/reject"
+              hx-include="#reject-note"
+              hx-target="#decision" hx-swap="innerHTML"
+              class="rounded border border-rose-300 px-3 py-2 text-sm text-rose-800 hover:bg-rose-50">
+              Reject
+            </button>
+
+            {% if unapproved_demo %}
+            <button type="button"
+              hx-post="/ui/proposals/{{ detail.id }}/attempt-unapproved"
+              hx-target="#decision" hx-swap="innerHTML"
+              class="ml-auto rounded border border-dashed border-slate-400 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              title="Asks the gateway to send this letter with a correctly signed token, while it is still pending. The gateway refuses at check 4 because it reads the status from its own database.">
+              Try to send without approval
+            </button>
+            {% endif %}
+          </div>
+
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <input id="approve-note" name="note" placeholder="Approval note (optional)"
+              class="rounded border border-slate-300 p-2 text-sm">
+            <input id="reject-note" name="note" placeholder="Rejection note (required to reject)"
+              class="rounded border border-slate-300 p-2 text-sm">
+          </div>
+        </form>
+        {% else %}
+        <pre class="mono mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs leading-relaxed">{{ detail.body }}</pre>
+        {% if detail.approvals %}
+        <div class="mt-3 space-y-1 text-xs text-slate-600">
+          {% for a in detail.approvals %}
+            <div>
+              <span class="font-medium">{{ a.decision }}</span> by
+              <span class="mono">{{ a.actor }}</span>
+              at {{ a.decided_at.strftime('%d %b %H:%M:%S') }}
+              {% if a.note %}&mdash; {{ a.note }}{% endif %}
+              {% if a.edited %}<span class="rounded bg-slate-100 px-1">edited before approval</span>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="decision" class="mt-4"></div>
+
+  {% else %}
+    <div class="rounded border border-slate-200 bg-white px-5 py-10 text-center text-sm text-slate-500">
+      Select a proposal on the left.
+    </div>
+  {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -64,6 +64,7 @@ source_modules =
 forbidden_modules =
     app.approval
     app.gateway_client
+    app.services
 
 [importlinter:contract:7]
 name = Only the gateway may import smtplib

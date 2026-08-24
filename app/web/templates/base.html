@@ -1,0 +1,53 @@
+{# The shell. Tailwind from a CDN, HTMX for interaction, no build step (section 9). #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Collections Agent{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    [x-cloak] { display: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+<header class="border-b border-slate-200 bg-white">
+  <div class="mx-auto max-w-7xl px-6 py-3">
+    <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+      <a href="/" class="text-sm font-semibold tracking-tight">Collections&nbsp;Agent</a>
+      <nav class="flex gap-4 text-sm">
+        <a class="hover:underline {% if request.url.path == '/' %}font-semibold{% endif %}" href="/">Dashboard</a>
+        <a class="hover:underline {% if request.url.path.startswith('/proposals') %}font-semibold{% endif %}" href="/proposals">
+          Queue{% if counters.pending %} <span class="rounded bg-amber-100 px-1.5 text-xs text-amber-800">{{ counters.pending }}</span>{% endif %}
+        </a>
+        <a class="hover:underline {% if request.url.path.startswith('/audit') %}font-semibold{% endif %}" href="/audit">Audit</a>
+        <a class="hover:underline {% if request.url.path.startswith('/outbox') %}font-semibold{% endif %}" href="/outbox">Outbox</a>
+        <a class="hover:underline text-slate-500" href="/docs">API</a>
+      </nav>
+      <div class="ml-auto" hx-get="/ui/health" hx-trigger="load, every 10s" hx-swap="innerHTML">
+        <span class="text-xs text-slate-400">checking…</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-7xl px-6 py-6">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="mx-auto max-w-7xl px-6 pb-10 pt-4 text-xs leading-relaxed text-slate-500">
+  <p>
+    The agent drafts; it cannot send. Every letter is reviewed here before anything leaves the
+    system, and the send is performed by a separate service the agent cannot reach.
+  </p>
+  <p class="mt-1">
+    Stripe test mode only. Operator <span class="mono">{{ operator }}</span> · model
+    <span class="mono">{{ model }}</span>
+  </p>
+</footer>
+
+</body>
+</html>

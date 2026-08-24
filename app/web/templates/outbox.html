@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Outbox · Collections Agent{% endblock %}
+{% block content %}
+<div class="rounded border border-slate-200 bg-white">
+  <div class="border-b border-slate-200 px-5 py-3">
+    <h1 class="text-sm font-semibold">Captured outbox</h1>
+    <p class="mt-1 text-xs text-slate-500">
+      Letters the gateway executed. With the default adapter these were written to the
+      database and to <span class="mono">/data/outbox</span> and <strong>nothing left this
+      machine</strong> &mdash; which is why cloning this repository cannot email a real person.
+    </p>
+  </div>
+  {% if messages %}
+  <ul class="divide-y divide-slate-100">
+    {% for m in messages %}
+    <li class="px-5 py-4">
+      <div class="flex flex-wrap items-baseline gap-x-3 text-sm">
+        <span class="font-medium">{{ m.subject }}</span>
+        <span class="text-slate-500">to <span class="mono">{{ m.to_email }}</span></span>
+        <span class="ml-auto text-xs text-slate-400">{{ m.created_at.strftime('%d %b %H:%M:%S') }} · {{ m.adapter }}</span>
+      </div>
+      <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs text-slate-700">{{ m.body }}</pre>
+      {% if m.file_path %}<div class="mt-1 mono text-xs text-slate-400">{{ m.file_path }}</div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="px-5 py-6 text-sm text-slate-500">Nothing has been sent.</p>
+  {% endif %}
+</div>
+{% endblock %}

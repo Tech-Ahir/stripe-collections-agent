@@ -342,3 +342,102 @@ def test_the_minor_units_check_has_narrow_boundaries(fragment, should_flag):
     body = letter_with(fragment)
     codes = {v.code for v in find_invented_figures(body, FACTS)}
     assert ("raw_minor_units" in codes) is should_flag, fragment
+
+
+# ----------------------------------------------------------------------------------
+# Payment links: Stripe reissues them on every read
+#
+# Exact matching was tried first and rejected a letter carrying a perfectly genuine link,
+# because the link had been reissued between the read and the draft. These tests pin both
+# halves of the fix, against numbers measured from live test mode.
+# ----------------------------------------------------------------------------------
+
+# Two reads of the SAME invoice. Identical for 140 of 159 characters; the tail is a
+# per-read timestamp and nonce.
+LINK_READ_1 = (
+    "https://invoice.stripe.com/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8xVG1mYXBFZzlBN0dRZUFU"
+    "LF9WODhVOElyaE1vbXpwUmZadVdwenNWSlFzQlpiYkdYLDE3ODEwMTk2Mw0200bU9TN0k8?s=ap"
+)
+LINK_READ_2 = (
+    "https://invoice.stripe.com/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8xVG1mYXBFZzlBN0dRZUFU"
+    "LF9WODhVOElyaE1vbXpwUmZadVdwenNWSlFzQlpiYkdYLDE3ODEwMTk2OA0200Boop1ARG?s=ap"
+)
+# A DIFFERENT invoice in the same account. Diverges at character 92.
+LINK_OTHER_INVOICE = (
+    "https://invoice.stripe.com/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8xVG1mYXBFZzlBN0dRZUFU"
+    "LF9WODhVaFE0T1lwdEVjMHUxaXFBTGVPTEd6NDNJV0lQLDE3ODEwMjEwMg0200na5wihYn?s=ap"
+)
+
+
+def test_the_measured_premise_still_holds():
+    """If these fixtures ever stop matching live Stripe, the threshold needs re-measuring."""
+    from app.agent.guardrails import STABLE_LINK_PREFIX
+
+    def common(a: str, b: str) -> int:
+        count = 0
+        for left, right in zip(a, b, strict=False):
+            if left != right:
+                break
+            count += 1
+        return count
+
+    same_invoice = common(LINK_READ_1, LINK_READ_2)
+    different_invoice = common(LINK_READ_1, LINK_OTHER_INVOICE)
+    assert LINK_READ_1 != LINK_READ_2, "Stripe reissues the link on every read"
+    assert same_invoice == 140
+    assert different_invoice == 92
+    assert different_invoice < STABLE_LINK_PREFIX <= same_invoice, (
+        "the threshold must tell invoices apart while tolerating a reissue"
+    )
+
+
+def test_a_reissued_link_for_the_same_invoice_is_accepted():
+    """The bug this fixed: a genuine link rejected because Stripe had reissued it."""
+    facts = {**FACTS, "hosted_invoice_url": LINK_READ_1}
+    body = GOOD_LETTER.replace("https://invoice.stripe.com/i/test_1001", LINK_READ_2)
+
+    assert find_invented_figures(body, facts) == []
+    assert not any("payment link" in entry for entry in find_missing_facts(body, facts))
+
+
+def test_a_link_for_a_different_invoice_is_still_rejected():
+    """Tolerating the reissue must not tolerate pointing at someone else's invoice."""
+    facts = {**FACTS, "hosted_invoice_url": LINK_READ_1}
+    body = GOOD_LETTER.replace("https://invoice.stripe.com/i/test_1001", LINK_OTHER_INVOICE)
+
+    violations = find_invented_figures(body, facts)
+    assert [v.code for v in violations] == ["invented_link"]
+
+
+@pytest.mark.parametrize(
+    "forged",
+    [
+        "https://invoice.stripe.com.evil.test/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8x",
+        "http://invoice.stripe.com/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8x",
+        "https://pay.servicia.ai/i/acct_1TmfapEg9A7GQeAT/test_YWNjdF8x",
+        "https://invoice.stripe.com/i/acct_OTHERACCOUNT/test_YWNjdF8x",
+    ],
+)
+def test_a_link_at_the_wrong_host_or_account_is_rejected(forged):
+    facts = {**FACTS, "hosted_invoice_url": LINK_READ_1}
+    body = GOOD_LETTER.replace("https://invoice.stripe.com/i/test_1001", forged)
+    assert any(v.code == "invented_link" for v in find_invented_figures(body, facts))
+
+
+def test_link_identity_ignores_the_query_string_and_trailing_punctuation():
+    from app.agent.guardrails import link_identity, links_match
+
+    assert link_identity(LINK_READ_1) == link_identity(LINK_READ_1 + "&extra=1")
+    assert links_match(LINK_READ_1 + ".", LINK_READ_1)
+    assert links_match(LINK_READ_1, LINK_READ_2)
+    assert not links_match(LINK_READ_1, LINK_OTHER_INVOICE)
+    assert not links_match("", LINK_READ_1)
+    assert not links_match(LINK_READ_1, "")
+
+
+def test_a_short_link_still_has_to_match_exactly():
+    """Below the threshold there is nothing to truncate, so the comparison stays strict."""
+    from app.agent.guardrails import links_match
+
+    assert links_match("https://invoice.stripe.com/i/test_1001", FACTS["hosted_invoice_url"])
+    assert not links_match("https://invoice.stripe.com/i/test_9999", FACTS["hosted_invoice_url"])

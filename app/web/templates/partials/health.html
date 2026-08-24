@@ -1,0 +1,21 @@
+{# Connection status for Stripe, Anthropic and the gateway, from /healthz (section 9). #}
+<div class="flex flex-wrap items-center gap-2 text-xs">
+  {% for name, check in health.checks.items() %}
+    {% set state = check.status %}
+    <span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5
+      {% if state == 'ok' %}border-emerald-200 bg-emerald-50 text-emerald-800
+      {% elif state == 'not_configured' %}border-slate-200 bg-slate-50 text-slate-600
+      {% else %}border-rose-200 bg-rose-50 text-rose-800{% endif %}"
+      title="{{ check | tojson }}">
+      <span class="h-1.5 w-1.5 rounded-full
+        {% if state == 'ok' %}bg-emerald-500{% elif state == 'not_configured' %}bg-slate-400{% else %}bg-rose-500{% endif %}"></span>
+      {{ name }}{% if state != 'ok' %} · {{ state }}{% endif %}
+    </span>
+  {% endfor %}
+  {% if health.checks.stripe.key_kind == 'standard' %}
+    <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-800"
+          title="The read-only split is a stated deliverable. Mint a restricted key (rk_test_...) for STRIPE_API_KEY_READ.">
+      read key is not restricted
+    </span>
+  {% endif %}
+</div>

@@ -1,0 +1,14 @@
+{% set s = run.status %}
+<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs
+  {% if s == 'running' %}bg-blue-50 text-blue-800
+  {% elif s == 'awaiting_approval' %}bg-amber-50 text-amber-800
+  {% elif s == 'completed' %}bg-emerald-50 text-emerald-800
+  {% elif s == 'failed' %}bg-rose-50 text-rose-800
+  {% else %}bg-slate-100 text-slate-700{% endif %}">
+  {% if s == 'running' %}<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>{% endif %}
+  {{ s.replace('_', ' ') }}
+</span>
+{% if run.params and run.params.get('scripted') %}
+<span class="ml-1 rounded-full border border-dashed border-slate-400 px-2 py-0.5 text-xs text-slate-600"
+      title="Produced by scripts/dev_seed_run.py. No model was called.">scripted fixture</span>
+{% endif %}

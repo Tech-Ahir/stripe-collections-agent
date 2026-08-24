@@ -34,6 +34,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+from urllib.parse import urlsplit
 
 # ----------------------------------------------------------------------------------
 # 1. Forbidden claims
@@ -183,6 +184,50 @@ def find_forbidden_claims(*texts: str) -> list[Violation]:
 
 
 # ----------------------------------------------------------------------------------
+# Payment links
+#
+# Used by both of the checks below, and the one thing here that cannot be compared
+# exactly.
+# ----------------------------------------------------------------------------------
+
+_URL = re.compile(r"https?://[^\s<>\)\]\"']+")
+
+#: How much of a payment link is stable enough to compare on.
+#:
+#: Stripe regenerates ``hosted_invoice_url`` on EVERY read: its trailing characters carry a
+#: per-read timestamp and nonce. Measured against live test mode, two reads of the SAME
+#: invoice share 140 of 159 characters, while two DIFFERENT invoices diverge at character
+#: 92. Any threshold in (92, 140] therefore still tells invoices apart while tolerating the
+#: drift, and 120 leaves margin at both ends.
+#:
+#: This was found the hard way: exact matching rejected a letter carrying a perfectly
+#: genuine link, because Stripe had reissued it between the read and the draft. Exact
+#: matching here is not merely strict, it is unimplementable.
+#:
+#: The letter is NOT rewritten to the newest link. Substituting text after the guardrail has
+#: approved it would mean the operator reviews one thing and the customer receives another,
+#: which is the failure check 6 exists to prevent.
+STABLE_LINK_PREFIX = 120
+
+
+def link_identity(url: str) -> str:
+    """The part of a payment link that identifies the invoice and does not drift."""
+    split = urlsplit((url or "").rstrip(".,;:!?)]}\"'"))
+    return f"{split.scheme}://{split.netloc}{split.path}"[:STABLE_LINK_PREFIX]
+
+
+def links_match(candidate: str, retrieved: str) -> bool:
+    """True when both URLs identify the same invoice at the same host.
+
+    A different host, a different Stripe account and a different invoice all fail. A
+    reissued link for the same invoice passes, which is the whole point.
+    """
+    if not candidate or not retrieved:
+        return False
+    return link_identity(candidate) == link_identity(retrieved)
+
+
+# ----------------------------------------------------------------------------------
 # 2. Required facts
 # ----------------------------------------------------------------------------------
 
@@ -248,7 +293,7 @@ def find_missing_facts(body: str, facts: dict[str, Any]) -> list[str]:
         missing.append(f"days overdue ({days})")
 
     link = facts.get("hosted_invoice_url")
-    if link and link not in text:
+    if link and not any(links_match(found_url, str(link)) for found_url in _URL.findall(text)):
         missing.append("hosted payment link")
 
     if not _DISPUTE_ROUTE.search(text):
@@ -262,8 +307,6 @@ def find_missing_facts(body: str, facts: dict[str, Any]) -> list[str]:
 # ----------------------------------------------------------------------------------
 
 _MONEY = re.compile(r"(?:[$£€¥]\s?[\d,]+(?:\.\d{1,3})?)|(?:\b[\d,]+\.\d{2}\s?[A-Z]{3}\b)")
-_URL = re.compile(r"https?://[^\s<>\)\]\"']+")
-_BIG_NUMBER = re.compile(r"(?<![\d.,$£€¥])\d{4,}(?![\d.,])")
 
 
 def _normalise_money(value: str) -> str:
@@ -295,15 +338,17 @@ def find_invented_figures(body: str, facts: dict[str, Any]) -> list[Violation]:
                 )
             )
 
-    allowed_urls = {str(value) for key, value in facts.items() if key.endswith("_url") and value}
+    allowed_urls = [str(value) for key, value in facts.items() if key.endswith("_url") and value]
     for match in _URL.finditer(text):
-        if match.group(0).rstrip(".,;:") not in allowed_urls:
+        # Compared on the stable identity prefix, not exactly: Stripe reissues the link on
+        # every read. See STABLE_LINK_PREFIX above for the measurement behind that.
+        if not any(links_match(match.group(0), allowed) for allowed in allowed_urls):
             found.append(
                 Violation(
                     "invented_link",
                     match.group(0),
-                    "Payment links are never constructed. Use the hosted_invoice_url "
-                    "exactly as the tool returned it.",
+                    "Payment links are never constructed. Use the hosted_invoice_url the "
+                    "tool returned for this invoice.",
                 )
             )
 

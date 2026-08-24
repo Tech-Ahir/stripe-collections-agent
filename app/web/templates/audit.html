@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Audit log · Collections Agent{% endblock %}
+{% block content %}
+
+<div class="mb-4 flex flex-wrap items-end gap-3">
+  <div>
+    <h1 class="text-sm font-semibold">Audit log</h1>
+    <p class="mt-1 text-xs text-slate-500">
+      Append-only and hash-chained. Each row commits to the one before it, so removing,
+      reordering or editing any of them is visible.
+    </p>
+  </div>
+  <button class="ml-auto rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          hx-get="/ui/audit/verify" hx-target="#chain" hx-swap="innerHTML">
+    Verify chain
+  </button>
+</div>
+
+{# The partial takes `chain`; the page has it nested under `page`. #}
+{% set chain = page.chain %}
+<div id="chain" class="mb-4">{% include "partials/chain.html" %}</div>
+
+<form method="get" action="/audit" class="mb-4 flex flex-wrap items-end gap-2 text-sm">
+  <label class="block">
+    <span class="text-xs text-slate-600">Actor</span>
+    <select name="actor" class="mt-1 block rounded border border-slate-300 p-1.5 text-sm">
+      <option value="">any</option>
+      {% for value in filters.actors %}
+        <option value="{{ value }}" {% if actor == value %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="block">
+    <span class="text-xs text-slate-600">Event</span>
+    <select name="event" class="mt-1 block rounded border border-slate-300 p-1.5 text-sm">
+      <option value="">any</option>
+      {% for value in filters.events %}
+        <option value="{{ value }}" {% if event == value %}selected{% endif %}>{{ value }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="rounded border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">Filter</button>
+  {% if actor or event %}<a href="/audit" class="text-xs text-blue-700 hover:underline">clear</a>{% endif %}
+  <span class="ml-auto text-xs text-slate-500">{{ page.total }} events</span>
+</form>
+
+<div class="overflow-x-auto rounded border border-slate-200 bg-white">
+  <table class="w-full text-sm">
+    <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr class="border-b border-slate-100">
+        <th class="px-4 py-2 font-medium">#</th>
+        <th class="px-4 py-2 font-medium">When</th>
+        <th class="px-4 py-2 font-medium">Actor</th>
+        <th class="px-4 py-2 font-medium">Event</th>
+        <th class="px-4 py-2 font-medium">Subject</th>
+        <th class="px-4 py-2 font-medium">Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in page.events %}
+      <tr class="border-b border-slate-50 align-top last:border-0
+        {% if row.event == 'action.refused' %}bg-rose-50/40{% elif row.event.endswith('succeeded') %}bg-emerald-50/40{% endif %}">
+        <td class="px-4 py-2 tabular-nums text-slate-400">{{ row.id }}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-slate-600">{{ row.ts.strftime('%d %b %H:%M:%S') }}</td>
+        <td class="px-4 py-2">
+          <span class="rounded bg-slate-100 px-1.5 text-xs">{{ row.actor }}</span>
+        </td>
+        <td class="px-4 py-2 mono text-xs">{{ row.event }}</td>
+        <td class="px-4 py-2 mono text-xs text-slate-500">
+          {{ row.subject_type }}
+          {% if row.subject_type == 'proposal' and row.subject_id != 'unknown' %}
+            <a class="text-blue-700 hover:underline" href="/proposals?selected={{ row.subject_id }}&status=all">{{ row.subject_id[:8] }}…</a>
+          {% elif row.subject_type == 'run' %}
+            <a class="text-blue-700 hover:underline" href="/runs/{{ row.subject_id }}">{{ row.subject_id[:8] }}…</a>
+          {% else %}
+            {{ row.subject_id }}
+          {% endif %}
+        </td>
+        <td class="px-4 py-2">
+          {% if row.detail %}
+          <details>
+            <summary class="cursor-pointer text-xs text-slate-500">
+              {% if row.detail.code %}<span class="mono text-rose-700">{{ row.detail.code }}</span>{% else %}detail{% endif %}
+            </summary>
+            <pre class="mt-1 max-h-48 max-w-xl overflow-auto rounded bg-slate-50 p-2 text-xs">{{ row.detail | tojson(indent=2) }}</pre>
+          </details>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page.total > page.limit %}
+<div class="mt-3 flex gap-2 text-sm">
+  {% if page.offset > 0 %}
+    <a class="rounded border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+       href="/audit?offset={{ [page.offset - page.limit, 0] | max }}{% if actor %}&actor={{ actor }}{% endif %}{% if event %}&event={{ event }}{% endif %}">newer</a>
+  {% endif %}
+  {% if page.offset + page.limit < page.total %}
+    <a class="rounded border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50"
+       href="/audit?offset={{ page.offset + page.limit }}{% if actor %}&actor={{ actor }}{% endif %}{% if event %}&event={{ event }}{% endif %}">older</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
