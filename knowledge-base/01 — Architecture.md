@@ -64,15 +64,15 @@ to make testing easier" is a change no functional test would catch.
 
 ## The stack, and why
 
-| Layer | Choice | Why |
-|---|---|---|
-| Backend | Python 3.12, FastAPI, Uvicorn | A Python backend was asked for. FastAPI gives the OpenAPI document for free, and that document is a deliverable. |
-| Agent | Anthropic Messages API, tool use, Claude Sonnet | Native tool-use loop. The tool schema is the agent's contract — see [[03 — Agent Design]]. |
-| Stripe | `stripe` Python SDK | Official, test-mode native. |
-| Persistence | SQLite via SQLAlchemy, on a Docker volume | Zero setup for a reviewer. The SQLAlchemy layer means Postgres is a URL change. |
-| UI | Jinja2 + HTMX + Tailwind CDN | Served by the same FastAPI app: one image, no Node build. |
-| Transport | Server-sent events for the run transcript | Simpler than websockets and sufficient for one-directional streaming. |
-| Packaging | Docker, Docker Compose, uv | Reproducible, and fast to install from a pinned lock file. |
+| Layer       | Choice                                          | Why                                                                                                              |
+| ----------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Backend     | Python 3.12, FastAPI, Uvicorn                   | A Python backend was asked for. FastAPI gives the OpenAPI document for free, and that document is a deliverable. |
+| Agent       | Anthropic Messages API, tool use, Claude Sonnet | Native tool-use loop. The tool schema is the agent's contract — see [[03 — Agent Design]].                       |
+| Stripe      | `stripe` Python SDK                             | Official, test-mode native.                                                                                      |
+| Persistence | SQLite via SQLAlchemy, on a Docker volume       | Zero setup for a reviewer. The SQLAlchemy layer means Postgres is a URL change.                                  |
+| UI          | Jinja2 + HTMX + Tailwind CDN                    | Served by the same FastAPI app: one image, no Node build.                                                        |
+| Transport   | Server-sent events for the run transcript       | Simpler than websockets and sufficient for one-directional streaming.                                            |
+| Packaging   | Docker, Docker Compose, uv                      | Reproducible, and fast to install from a pinned lock file.                                                       |
 
 ## Three container images, not two
 

@@ -79,22 +79,22 @@ curl -s localhost:8000/v1/audit/verify
 
 ## Configuration
 
-| Variable | Default | Notes |
-|---|---|---|
-| `STRIPE_API_KEY_READ` | — | **Required.** Restricted, read-only. Agent service only. |
-| `APPROVAL_SIGNING_SECRET` | — | **Required**, 32+ bytes. Shared by both services and nothing else. |
-| `ANTHROPIC_API_KEY` | — | Needed only for a live agent run. |
-| `STRIPE_API_KEY_SEED` | — | The seed script only. Never read by a service. |
-| `STRIPE_API_KEY_WRITE` | empty | Gateway only. Needed only if invoice send is enabled. |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5` | |
-| `EMAIL_ADAPTER` | `outbox` | `outbox` \| `smtp` \| `resend` |
-| `ENABLE_STRIPE_INVOICE_SEND` | `false` | |
-| `PROPOSAL_TTL_HOURS` | `72` | |
-| `MAX_TOOL_CALLS_PER_RUN` | `25` | |
-| `MAX_PROPOSALS_PER_RUN` | `10` | |
-| `STRIPE_INCLUDE_TEST_CLOCK_INVOICES` | `true` | Makes the test-mode fixture visible. See [[04 — Stripe Integration]]. |
-| `ENABLE_UNAPPROVED_ATTEMPT_DEMO` | `true` | The "try to send without approval" button. |
-| `OPERATOR_ID` | `operator@servicia.ai` | The single operator identity. |
+| Variable                             | Default                | Notes                                                                 |
+| ------------------------------------ | ---------------------- | --------------------------------------------------------------------- |
+| `STRIPE_API_KEY_READ`                | —                      | **Required.** Restricted, read-only. Agent service only.              |
+| `APPROVAL_SIGNING_SECRET`            | —                      | **Required**, 32+ bytes. Shared by both services and nothing else.    |
+| `ANTHROPIC_API_KEY`                  | —                      | Needed only for a live agent run.                                     |
+| `STRIPE_API_KEY_SEED`                | —                      | The seed script only. Never read by a service.                        |
+| `STRIPE_API_KEY_WRITE`               | empty                  | Gateway only. Needed only if invoice send is enabled.                 |
+| `ANTHROPIC_MODEL`                    | `claude-sonnet-5`      |                                                                       |
+| `EMAIL_ADAPTER`                      | `outbox`               | `outbox` \| `smtp` \| `resend`                                        |
+| `ENABLE_STRIPE_INVOICE_SEND`         | `false`                |                                                                       |
+| `PROPOSAL_TTL_HOURS`                 | `72`                   |                                                                       |
+| `MAX_TOOL_CALLS_PER_RUN`             | `25`                   |                                                                       |
+| `MAX_PROPOSALS_PER_RUN`              | `10`                   |                                                                       |
+| `STRIPE_INCLUDE_TEST_CLOCK_INVOICES` | `true`                 | Makes the test-mode fixture visible. See [[04 — Stripe Integration]]. |
+| `ENABLE_UNAPPROVED_ATTEMPT_DEMO`     | `true`                 | The "try to send without approval" button.                            |
+| `OPERATOR_ID`                        | `operator@servicia.ai` | The single operator identity.                                         |
 
 Compose refuses to start if `STRIPE_API_KEY_READ` or `APPROVAL_SIGNING_SECRET` is unset, rather
 than booting into a state where tokens cannot be verified.
