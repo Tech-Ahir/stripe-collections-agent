@@ -91,7 +91,13 @@ services:
       dockerfile: docker/tests.Dockerfile
     entrypoint: ["python"]
     environment:
-      STRIPE_API_KEY_SEED: ${STRIPE_API_KEY_SEED:?set STRIPE_API_KEY_SEED in .env to seed}
+      # Deliberately `:-` and not `:?`. Compose interpolates the WHOLE file before it works
+      # out which services a command touches, so a `:?` here makes `docker compose up` fail
+      # for anyone who has not set a seed key -- even though this service is behind a profile
+      # and is not being started. That broke CI and would have broken the README's own
+      # step 2 for a reader who had not reached step 3 yet. The seeding script prints a far
+      # more useful message when the key is absent, so nothing is lost by letting it through.
+      STRIPE_API_KEY_SEED: ${STRIPE_API_KEY_SEED:-}
       STRIPE_API_KEY_READ: ${STRIPE_API_KEY_READ:-}
       STRIPE_INCLUDE_TEST_CLOCK_INVOICES: ${STRIPE_INCLUDE_TEST_CLOCK_INVOICES:-true}
 

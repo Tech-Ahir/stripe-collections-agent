@@ -22,11 +22,16 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
-
-      - name: Install dependencies from the lock file
-        run: uv pip install --system -r requirements-dev.txt
+      # Into a uv-managed virtualenv, NOT `uv pip install --system`. The runner's system
+      # Python is Debian's and externally managed (PEP 668), so `--system` is refused
+      # outright -- `uv python install` puts a 3.12 on disk but does not make it the
+      # interpreter `--system` resolves to. Putting .venv/bin on PATH also means the tests
+      # that shell out to `lint-imports` find the same one this job installed.
+      - name: Install Python 3.12 and the pinned dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install -r requirements-dev.txt
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Lint
         run: |

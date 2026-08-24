@@ -16,6 +16,7 @@ deployment configuration itself.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -238,3 +239,49 @@ def test_the_readme_seed_command_names_a_service_that_has_the_key(compose):
         assert "STRIPE_API_KEY_SEED" in _env_keys(compose["services"][service]), (
             f"README tells the reader to seed with `{service}`, which has no Stripe key"
         )
+
+
+# ----------------------------------------------------------------------------------
+# Interpolation applies to the whole file, profiles or not
+# ----------------------------------------------------------------------------------
+
+#: Variables that genuinely must be present for `docker compose up` to be meaningful. A `:?`
+#: on anything else makes starting the system fail over a value it does not need yet.
+REQUIRED_TO_START = {"STRIPE_API_KEY_READ", "APPROVAL_SIGNING_SECRET"}
+
+
+def test_only_variables_needed_to_start_the_system_are_mandatory(compose):
+    """Compose interpolates the ENTIRE file before deciding which services to act on.
+
+    So a `${FOO:?...}` on a service behind a profile still makes plain `docker compose up`
+    fail when FOO is unset. That is exactly what happened: a `:?` on the profile-gated `seed`
+    service broke CI and would have broken the README's own step 2 for any reader who had not
+    reached step 3 yet.
+    """
+    mandatory: dict[str, str] = {}
+    for name, service in compose["services"].items():
+        env = service.get("environment") or {}
+        values = env.values() if isinstance(env, dict) else env
+        for value in values:
+            for match in re.finditer(r"\$\{([A-Z_]+):\?", str(value)):
+                mandatory[match.group(1)] = name
+
+    unexpected = {var: svc for var, svc in mandatory.items() if var not in REQUIRED_TO_START}
+    assert unexpected == {}, (
+        "these variables are mandatory for `docker compose up` but are not needed to start "
+        f"the system: {unexpected}"
+    )
+
+
+def test_a_profiled_service_never_makes_a_variable_mandatory(compose):
+    """Stated separately because it is the specific trap, and it is not obvious."""
+    for name, service in compose["services"].items():
+        if not service.get("profiles"):
+            continue
+        env = service.get("environment") or {}
+        values = env.values() if isinstance(env, dict) else env
+        for value in values:
+            assert ":?" not in str(value), (
+                f"service {name!r} is behind a profile, so it is not started by "
+                f"`docker compose up` -- but `:?` in {value!r} would still fail that command"
+            )
