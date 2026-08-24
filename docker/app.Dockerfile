@@ -25,6 +25,9 @@ RUN uv pip install --system --no-cache -r requirements.txt
 # Only the agent service and the shared contract. Deliberately not gateway/.
 COPY shared/ ./shared/
 COPY app/ ./app/
+# scripts/demo_boundary.py drives the live gateway over the internal network, which is how
+# section 5 says the handoff call opens. It ships in the image so it needs no host Python.
+COPY scripts/ ./scripts/
 
 RUN mkdir -p /data
 

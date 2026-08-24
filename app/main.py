@@ -17,8 +17,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.guards import assert_no_action_credentials
-from shared import audit
-from shared.db import init_db, run_in_transaction
+from shared.schema import init_schema_and_audit
 
 log = logging.getLogger("app")
 
@@ -33,17 +32,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # Rule 3, checked before anything else happens.
     assert_no_action_credentials()
 
-    init_db()
-    run_in_transaction(
-        lambda session: audit.append(
-            session,
-            actor="system",
-            event=audit.SYSTEM_STARTED,
-            subject_type="service",
-            subject_id=SERVICE,
-            detail={"version": VERSION, "role": "agent-service"},
-        )
-    )
+    init_schema_and_audit(service=SERVICE, version=VERSION)
     log.info("agent service ready; gateway at %s", settings().gateway_url)
     yield
 

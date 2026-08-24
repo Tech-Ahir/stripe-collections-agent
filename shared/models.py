@@ -202,12 +202,20 @@ class TokenNonce(Base):
     which nonce was *minted*, which is a different fact. With ``nonce`` as the primary
     key, consuming a nonce is an INSERT that either succeeds or collides, so two
     concurrent replays cannot both get through.
+
+    ``idempotency_key`` records which request consumed the nonce, and it is what lets
+    section 5's checks 3 and 7 both hold. A *replay* is the same token used to cause a new
+    send, so a different idempotency key. A *retry* is the same logical request arriving
+    twice, so the same key -- and that falls through to check 7, which returns the original
+    result rather than refusing. Without this column one of the two required behaviours
+    has to give way.
     """
 
     __tablename__ = "token_nonces"
 
     nonce: Mapped[str] = mapped_column(String(36), primary_key=True)
     proposal_id: Mapped[str] = mapped_column(String(36), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(64), index=True)
     consumed_at: Mapped[datetime] = mapped_column(UtcDateTime, default=now_utc)
 
 

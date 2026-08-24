@@ -5,9 +5,10 @@ credentials to do so. It publishes no port: nothing outside the internal Docker 
 can reach it, which is the architectural boundary made physical.
 
 It trusts nothing in a request body except what it can verify -- the HMAC signature, its
-own database record of the proposal, and the idempotency key. The execute endpoint and its
-seven checks arrive in Phase 2; this module currently exposes liveness only, so that
-nothing pretends to work before its refusal tests exist.
+own database record of the proposal, and the idempotency key.
+
+There is exactly one route that can act: POST /internal/actions/execute, in gateway/api.py.
+Read gateway/verify.py alongside it; between them they are the whole boundary.
 """
 
 from __future__ import annotations
@@ -19,9 +20,9 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from gateway.api import install_error_handling, router
 from gateway.config import settings
-from shared import audit
-from shared.db import init_db, run_in_transaction
+from shared.schema import init_schema_and_audit
 
 log = logging.getLogger("gateway")
 
@@ -33,22 +34,7 @@ VERSION = "0.1.0"
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     config = settings()
     logging.basicConfig(level=config.log_level.upper())
-    init_db()
-    run_in_transaction(
-        lambda session: audit.append(
-            session,
-            actor="system",
-            event=audit.SYSTEM_STARTED,
-            subject_type="service",
-            subject_id=SERVICE,
-            detail={
-                "version": VERSION,
-                "role": "action-gateway",
-                "email_adapter": config.email_adapter,
-                "stripe_invoice_send": config.enable_stripe_invoice_send,
-            },
-        )
-    )
+    init_schema_and_audit(service=SERVICE, version=VERSION)
     log.info("action gateway ready; email adapter=%s", config.email_adapter)
     yield
 
@@ -64,6 +50,10 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
 )
+
+
+app.include_router(router)
+install_error_handling(app)
 
 
 @app.get("/healthz", tags=["ops"], summary="Liveness")
