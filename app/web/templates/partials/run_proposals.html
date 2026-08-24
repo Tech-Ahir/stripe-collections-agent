@@ -1,28 +1,28 @@
 {% if proposals %}
 <ul class="divide-y divide-slate-100">
   {% for p in proposals %}
-  <li class="px-5 py-3">
+  <li class="px-5 py-3.5">
     <div class="flex items-baseline justify-between gap-2">
-      <span class="text-sm font-medium">{{ p.customer_name or p.customer_email }}</span>
-      <span class="text-sm tabular-nums">{{ p.amount_display }}</span>
+      <span class="truncate text-sm font-medium">{{ p.customer_name or p.customer_email }}</span>
+      <span class="shrink-0 text-sm font-medium tabular-nums">{{ p.amount_display }}</span>
     </div>
-    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-      <span class="rounded bg-slate-100 px-1.5">{{ p.tone }}</span>
+    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+      <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">{{ p.tone }}</span>
       <span>{{ p.days_overdue }} days overdue</span>
-      <span class="rounded px-1.5
-        {% if p.status == 'pending' %}bg-amber-50 text-amber-800
-        {% elif p.status == 'executed' %}bg-emerald-50 text-emerald-800
+      <span class="rounded px-1.5 py-0.5
+        {% if p.status == 'pending' %}bg-amber-50 text-amber-900
+        {% elif p.status == 'executed' %}bg-emerald-50 text-emerald-900
         {% elif p.status in ('rejected', 'expired', 'failed') %}bg-slate-100 text-slate-600
-        {% else %}bg-blue-50 text-blue-800{% endif %}">
+        {% else %}bg-blue-50 text-blue-900{% endif %}">
         {% if p.status == 'pending' %}awaiting approval{% else %}{{ p.status }}{% endif %}
       </span>
     </div>
-    <p class="mt-1.5 text-xs leading-snug text-slate-600">{{ p.rationale }}</p>
+    <p class="mt-1.5 text-xs leading-relaxed text-slate-600">{{ p.rationale }}</p>
     <a class="mt-1 inline-block text-xs text-blue-700 hover:underline"
        href="/proposals?selected={{ p.id }}">review &rarr;</a>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="px-5 py-6 text-sm text-slate-500">No proposals yet.</p>
+<p class="px-5 py-8 text-sm text-slate-500">No proposals yet.</p>
 {% endif %}

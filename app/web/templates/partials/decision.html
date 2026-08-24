@@ -1,19 +1,23 @@
 {# The gateway's answer, shown verbatim.
    Section 6: "Gateway refusal codes surface to the UI unchanged. When a refusal happens the
    UI must show the code, because the refusal is the feature." So the code is the headline,
-   not a generic failure toast. #}
+   not a generic failure toast.
+
+   The check list is the one piece of this UI worth designing carefully: it is what a
+   reviewer reads to see how far a request got before it was stopped. One row per check,
+   the number and name it has in gateway/verify.py, and the question it answers. #}
 
 {% if result.error %}
   {# An app-side error, in section 6's envelope. #}
-  <div class="rounded border border-rose-300 bg-rose-50 p-4">
-    <div class="flex items-baseline gap-2">
+  <div class="rounded-lg border border-rose-300 bg-rose-50 p-4">
+    <div class="flex flex-wrap items-baseline gap-2">
       <span class="mono rounded bg-rose-600 px-2 py-0.5 text-sm font-semibold text-white">{{ result.error.code }}</span>
       <span class="text-sm text-rose-900">{{ result.error.message }}</span>
     </div>
   </div>
 
 {% elif result.edit %}
-  <div class="rounded border border-slate-300 bg-white p-4 text-sm">
+  <div class="rounded-lg border rule bg-white p-4 text-sm">
     <div class="font-medium">Edit saved.</div>
     <p class="mt-1 text-slate-600">{{ result.edit.note }}</p>
     <dl class="mono mt-2 space-y-0.5 text-xs text-slate-500">
@@ -26,8 +30,8 @@
   {% set g = result.gateway %}
 
   {% if g.executed %}
-    <div class="rounded border border-emerald-300 bg-emerald-50 p-4">
-      <div class="flex items-baseline gap-2">
+    <div class="rounded-lg border border-emerald-300 bg-emerald-50/70 p-4">
+      <div class="flex flex-wrap items-baseline gap-2">
         <span class="rounded bg-emerald-600 px-2 py-0.5 text-sm font-semibold text-white">sent</span>
         <span class="text-sm text-emerald-900">
           The gateway executed this action. HTTP {{ g.http_status }}.
@@ -35,22 +39,24 @@
         <a href="/outbox" class="ml-auto text-xs text-emerald-800 underline">see the outbox &rarr;</a>
       </div>
 
-      <div class="mt-3 text-xs font-medium uppercase tracking-wide text-emerald-800">
-        The seven checks that had to pass
+      <div class="mt-3 rounded-md bg-white/70 p-3">
+        <div class="eyebrow text-emerald-900/70">The seven checks that had to pass</div>
+        <ol class="mt-2 space-y-1.5">
+          {% for check in g.checks %}
+          <li class="flex items-baseline gap-2 text-emerald-950">
+            <span class="text-emerald-600">&check;</span>
+            <span class="flex-1">
+              <span class="mono text-xs">{{ check.number }}. {{ check.name }}</span>
+              <span class="block text-xs text-emerald-800/70">{{ check.question }}</span>
+            </span>
+          </li>
+          {% endfor %}
+        </ol>
       </div>
-      <ol class="mt-1 space-y-0.5">
-        {% for check in g.checks %}
-        <li class="flex items-baseline gap-2 text-xs text-emerald-900">
-          <span class="text-emerald-600">&check;</span>
-          <span class="mono">{{ check.number }}. {{ check.name }}</span>
-          <span class="text-emerald-700">{{ check.question }}</span>
-        </li>
-        {% endfor %}
-      </ol>
     </div>
 
   {% else %}
-    <div class="rounded border border-rose-300 bg-rose-50 p-4">
+    <div class="rounded-lg border border-rose-300 bg-rose-50/80 p-4">
       <div class="flex flex-wrap items-baseline gap-2">
         <span class="mono rounded bg-rose-600 px-2 py-0.5 text-sm font-semibold text-white">{{ g.error_code }}</span>
         <span class="text-sm text-rose-900">HTTP {{ g.http_status }}</span>
@@ -62,23 +68,27 @@
         <span class="ml-auto text-xs font-medium text-rose-800">nothing was sent</span>
       </div>
 
-      <p class="mt-2 text-sm text-rose-900">{{ g.error_message }}</p>
+      <p class="mt-2 max-w-prose text-sm leading-relaxed text-rose-900">{{ g.error_message }}</p>
 
       {% if g.checks_passed %}
-      <div class="mt-3 text-xs text-rose-800">
-        <span class="font-medium uppercase tracking-wide">Checks that passed before the refusal</span>
-        <ol class="mt-1 space-y-0.5">
+      <div class="mt-3 rounded-md bg-white/70 p-3">
+        <div class="eyebrow text-rose-900/70">Checks that passed before the refusal</div>
+        <ol class="mt-2 space-y-1">
           {% for name in g.checks_passed %}
-          <li class="mono">&check; {{ loop.index }}. {{ name }}</li>
+          <li class="mono flex items-baseline gap-2 text-xs text-slate-700">
+            <span class="text-emerald-600">&check;</span>{{ loop.index }}. {{ name }}
+          </li>
           {% endfor %}
-          <li class="mono font-semibold">&times; {{ g.failed_check }}. refused here</li>
+          <li class="mono flex items-baseline gap-2 text-xs font-semibold text-rose-900">
+            <span>&times;</span>{{ g.failed_check }}. refused here
+          </li>
         </ol>
       </div>
       {% endif %}
 
       {% if result.decision == 'attempt_unapproved' %}
-      <p class="mt-3 rounded bg-white/60 p-2 text-xs leading-relaxed text-rose-900">
-        <strong>This is the point of the architecture.</strong> That token was correctly
+      <p class="mt-3 max-w-prose rounded-md bg-white/70 p-3 text-xs leading-relaxed text-rose-900">
+        <strong class="font-semibold">This is the point of the architecture.</strong> That token was correctly
         signed &mdash; every cryptographic check passed. The gateway refused anyway, because it
         read this proposal's status out of its own database rather than believing anything the
         caller sent it. A forged or replayed request cannot cause a send for the same reason.
@@ -88,16 +98,16 @@
   {% endif %}
 
   <details class="mt-2">
-    <summary class="cursor-pointer text-xs text-slate-500">the gateway's raw response</summary>
-    <pre class="mt-1 max-h-64 overflow-auto rounded bg-slate-50 p-3 text-xs">{{ g.gateway_response | tojson(indent=2) }}</pre>
+    <summary class="cursor-pointer text-xs text-slate-500 hover:text-slate-700">the gateway's raw response</summary>
+    <pre class="mono mt-1 max-h-64 overflow-auto rounded-md bg-slate-50 p-3 text-xs">{{ g.gateway_response | tojson(indent=2) }}</pre>
   </details>
 
 {% else %}
-  <div class="rounded border border-slate-300 bg-white p-4 text-sm">
+  <div class="rounded-lg border rule bg-white p-4 text-sm">
     <span class="font-medium">{{ result.decision }}</span> recorded.
     This proposal is now <span class="mono">{{ result.status }}</span>.
     {% if result.decision == 'reject' %}
-    <p class="mt-1 text-xs text-slate-600">
+    <p class="mt-1 text-xs leading-relaxed text-slate-600">
       Terminal. If anyone now asks the gateway to execute it, it will refuse with
       <span class="mono">not_approved</span> &mdash; try it with the button above.
     </p>
@@ -105,7 +115,7 @@
   </div>
 {% endif %}
 
-<div class="mt-2 text-xs text-slate-400">
-  <a class="underline" href="/proposals">back to the queue</a> ·
+<div class="mt-2 flex gap-3 text-xs text-slate-500">
+  <a class="underline" href="/proposals">back to the queue</a>
   <a class="underline" href="/audit">see this in the audit log</a>
 </div>

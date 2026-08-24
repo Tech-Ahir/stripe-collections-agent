@@ -1,4 +1,8 @@
-{# The shell. Tailwind from a CDN, HTMX for interaction, no build step (section 9). #}
+{# The shell. Tailwind from a CDN, HTMX for interaction, no build step (section 9).
+
+   Two surfaces, deliberately distinct: quiet app chrome in a sans face, and the letter
+   itself on a warm sheet in a serif. The letter is correspondence a customer receives and
+   proofreading it is the reviewer's job, so it should not look like UI. #}
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,24 +13,63 @@
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
     [x-cloak] { display: none; }
+    :root {
+      --rule:  #e3e6ea;   /* hairlines */
+      --muted: #5b6472;   /* labels, captions */
+      --sheet: #fbfaf7;   /* the letter surface */
+    }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .rule { border-color: var(--rule); }
+    /* The document face. A serif at a generous measure is easier to proofread, and it marks
+       the letter as the thing that leaves the building. */
+    .sheet {
+      background: var(--sheet);
+      font-family: ui-serif, Georgia, "Times New Roman", serif;
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      overflow-wrap: break-word;
+    }
+    .eyebrow {
+      font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase;
+      font-weight: 600; color: var(--muted);
+    }
+    /* A quiet numbered marker for the reading order of a review. The order is real -- the
+       rationale, then the facts, then the history, then the letter -- so numbering it
+       carries information rather than decorating. */
+    .step-no {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 1.25rem; height: 1.25rem; border-radius: 9999px;
+      background: #eef1f4; color: var(--muted);
+      font-size: 0.625rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
 
-<header class="border-b border-slate-200 bg-white">
-  <div class="mx-auto max-w-7xl px-6 py-3">
-    <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+<header class="border-b rule bg-white">
+  <div class="mx-auto max-w-7xl px-6">
+    <div class="flex flex-wrap items-center gap-x-8 gap-y-2 py-3">
       <a href="/" class="text-sm font-semibold tracking-tight">Collections&nbsp;Agent</a>
-      <nav class="flex gap-4 text-sm">
-        <a class="hover:underline {% if request.url.path == '/' %}font-semibold{% endif %}" href="/">Dashboard</a>
-        <a class="hover:underline {% if request.url.path.startswith('/proposals') %}font-semibold{% endif %}" href="/proposals">
-          Queue{% if counters.pending %} <span class="rounded bg-amber-100 px-1.5 text-xs text-amber-800">{{ counters.pending }}</span>{% endif %}
+
+      <nav class="flex items-center gap-5 text-sm">
+        {% set here = request.url.path %}
+        <a class="border-b-2 pb-0.5 {% if here == '/' %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+           href="/">Dashboard</a>
+        <a class="flex items-center gap-1.5 border-b-2 pb-0.5 {% if here.startswith('/proposals') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+           href="/proposals">
+          Queue{% if counters.pending %} <span class="rounded-full bg-amber-500 px-1.5 text-xs font-semibold leading-4 text-white">{{ counters.pending }}</span>{% endif %}
         </a>
-        <a class="hover:underline {% if request.url.path.startswith('/audit') %}font-semibold{% endif %}" href="/audit">Audit</a>
-        <a class="hover:underline {% if request.url.path.startswith('/outbox') %}font-semibold{% endif %}" href="/outbox">Outbox</a>
-        <a class="hover:underline text-slate-500" href="/docs">API</a>
+        <a class="border-b-2 pb-0.5 {% if here.startswith('/audit') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+           href="/audit">Audit</a>
+        <a class="border-b-2 pb-0.5 {% if here.startswith('/outbox') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+           href="/outbox">Outbox</a>
+        <a class="border-b-2 border-transparent pb-0.5 text-slate-500 hover:text-slate-900" href="/docs">API</a>
       </nav>
+
       <div class="ml-auto" hx-get="/ui/health" hx-trigger="load, every 10s" hx-swap="innerHTML">
         <span class="text-xs text-slate-400">checking…</span>
       </div>
@@ -38,15 +81,17 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="mx-auto max-w-7xl px-6 pb-10 pt-4 text-xs leading-relaxed text-slate-500">
-  <p>
-    The agent drafts; it cannot send. Every letter is reviewed here before anything leaves the
-    system, and the send is performed by a separate service the agent cannot reach.
-  </p>
-  <p class="mt-1">
-    Stripe test mode only. Operator <span class="mono">{{ operator }}</span> · model
-    <span class="mono">{{ model }}</span>
-  </p>
+<footer class="mx-auto max-w-7xl px-6 pb-10 pt-6">
+  <div class="border-t rule pt-4 text-xs leading-relaxed text-slate-500">
+    <p class="max-w-3xl">
+      The agent drafts; it cannot send. Every letter is reviewed here before anything leaves the
+      system, and the send is performed by a separate service the agent cannot reach.
+    </p>
+    <p class="mt-1">
+      Stripe test mode only. Operator <span class="mono">{{ operator }}</span> · model
+      <span class="mono">{{ model }}</span>
+    </p>
+  </div>
 </footer>
 
 </body>

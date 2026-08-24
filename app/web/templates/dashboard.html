@@ -5,39 +5,41 @@
 <div class="grid gap-6 lg:grid-cols-3">
 
   {# --- Start a run ------------------------------------------------------------- #}
-  <section class="lg:col-span-1 rounded border border-slate-200 bg-white p-5">
+  <section class="self-start rounded-lg border rule bg-white p-5 lg:col-span-1">
     <h2 class="text-sm font-semibold">Start an agent run</h2>
-    <p class="mt-1 text-xs text-slate-500">
+    <p class="mt-1 text-xs leading-relaxed text-slate-500">
       The agent chooses which tools to call and in what order. It drafts letters into the
       queue and can send nothing.
     </p>
     <form method="post" action="/ui/runs" class="mt-4 space-y-3">
       <label class="block">
-        <span class="text-xs font-medium text-slate-700">Goal <span class="text-slate-400">(optional)</span></span>
+        <span class="text-xs font-medium text-slate-700">Goal <span class="font-normal text-slate-400">(optional)</span></span>
         <textarea name="goal" rows="3" placeholder="Leave blank for the default collections goal."
-          class="mt-1 w-full rounded border border-slate-300 p-2 text-sm"></textarea>
+          class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm placeholder:text-slate-400"></textarea>
       </label>
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
           <span class="text-xs font-medium text-slate-700">Min days overdue</span>
           <input type="number" name="min_days_overdue" value="1" min="0"
-            class="mt-1 w-full rounded border border-slate-300 p-2 text-sm">
+            class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm tabular-nums">
         </label>
         <label class="block">
           <span class="text-xs font-medium text-slate-700">Max proposals</span>
           <input type="number" name="max_proposals" value="{{ max_proposals }}" min="1"
-            class="mt-1 w-full rounded border border-slate-300 p-2 text-sm">
+            class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm tabular-nums">
         </label>
       </div>
-      <button class="w-full rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">
+      <button class="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
         Start agent run
       </button>
     </form>
   </section>
 
   {# --- Counters ---------------------------------------------------------------- #}
-  <section class="lg:col-span-2 space-y-6">
-    {# Section 9: "Counters: overdue invoices, pending proposals, approved today, sent today." #}
+  <section class="space-y-6 lg:col-span-2">
+    {# Section 9: "Counters: overdue invoices, pending proposals, approved today, sent today."
+       Each card's one-line explanation is shown rather than hidden in a tooltip, because a
+       counter nobody can interpret is a counter nobody trusts. #}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {% for label, value, hint in [
         ('Overdue invoices', overdue, 'Open and past due in Stripe right now'),
@@ -45,48 +47,51 @@
         ('Approved today', counters.approved_today, 'Approvals recorded since midnight UTC'),
         ('Sent today', counters.sent_today, 'Executions the gateway completed since midnight UTC')
       ] %}
-      <div class="rounded border border-slate-200 bg-white p-4" title="{{ hint }}">
-        <div class="text-2xl font-semibold tabular-nums">
+      <div class="rounded-lg border rule bg-white p-4">
+        <div class="text-[1.75rem] font-semibold leading-none tabular-nums">
           {% if value is none %}<span class="text-slate-300" title="Stripe could not be reached">&mdash;</span>
           {% else %}{{ value }}{% endif %}
         </div>
-        <div class="mt-0.5 text-xs text-slate-500">{{ label }}</div>
+        <div class="mt-1.5 text-sm font-medium">{{ label }}</div>
+        <div class="mt-0.5 text-xs leading-snug text-slate-500">{{ hint }}</div>
       </div>
       {% endfor %}
     </div>
 
-    <div class="rounded border border-slate-200 bg-white">
-      <div class="flex items-baseline justify-between border-b border-slate-200 px-5 py-3">
+    <div class="self-start rounded-lg border rule bg-white">
+      <div class="flex items-baseline justify-between border-b rule px-5 py-3">
         <h2 class="text-sm font-semibold">Recent runs</h2>
         <a href="/proposals" class="text-xs text-blue-700 hover:underline">Go to the queue &rarr;</a>
       </div>
       {% if runs %}
-      <table class="w-full text-sm">
-        <thead class="text-left text-xs uppercase tracking-wide text-slate-500">
-          <tr class="border-b border-slate-100">
-            <th class="px-5 py-2 font-medium">Started</th>
-            <th class="px-5 py-2 font-medium">Status</th>
-            <th class="px-5 py-2 font-medium text-right">Tool calls</th>
-            <th class="px-5 py-2 font-medium text-right">Proposals</th>
-            <th class="px-5 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-        {% for run in runs %}
-          <tr class="border-b border-slate-50 last:border-0">
-            <td class="px-5 py-2 whitespace-nowrap text-slate-600">{{ run.started_at.strftime('%d %b %H:%M:%S') }}</td>
-            <td class="px-5 py-2">{% include "partials/run_status.html" %}</td>
-            <td class="px-5 py-2 text-right tabular-nums">{{ run.tool_calls }}</td>
-            <td class="px-5 py-2 text-right tabular-nums">{{ run.proposals }}</td>
-            <td class="px-5 py-2 text-right">
-              <a class="text-blue-700 hover:underline" href="/runs/{{ run.id }}">transcript</a>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b rule text-left">
+              <th class="eyebrow px-5 py-2">Started</th>
+              <th class="eyebrow px-5 py-2">Status</th>
+              <th class="eyebrow px-5 py-2 text-right">Tool calls</th>
+              <th class="eyebrow px-5 py-2 text-right">Proposals</th>
+              <th class="px-5 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for run in runs %}
+            <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+              <td class="whitespace-nowrap px-5 py-2.5 text-slate-600">{{ run.started_at.strftime('%d %b %H:%M:%S') }}</td>
+              <td class="px-5 py-2.5">{% include "partials/run_status.html" %}</td>
+              <td class="px-5 py-2.5 text-right tabular-nums">{{ run.tool_calls }}</td>
+              <td class="px-5 py-2.5 text-right tabular-nums">{{ run.proposals }}</td>
+              <td class="px-5 py-2.5 text-right">
+                <a class="text-blue-700 hover:underline" href="/runs/{{ run.id }}">transcript</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% else %}
-      <p class="px-5 py-6 text-sm text-slate-500">No runs yet. Start one on the left.</p>
+      <p class="px-5 py-8 text-sm text-slate-500">No runs yet. Start one on the left.</p>
       {% endif %}
     </div>
   </section>

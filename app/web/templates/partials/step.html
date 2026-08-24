@@ -1,31 +1,31 @@
 {# One transcript entry, rendered by type (section 9). #}
 <li class="px-5 py-3 text-sm">
 {% if step.type == 'thought' %}
-  <div class="text-xs uppercase tracking-wide text-slate-400">reasoning</div>
-  <p class="mt-1 italic text-slate-700">{{ step.payload.text }}</p>
+  <div class="eyebrow">reasoning</div>
+  <p class="mt-1 text-slate-700">{{ step.payload.text }}</p>
 
 {% elif step.type == 'message' %}
-  <div class="text-xs uppercase tracking-wide text-slate-400">
+  <div class="eyebrow {% if step.payload.kind == 'guardrail' %}text-rose-700{% endif %}">
     {% if step.payload.kind == 'guardrail' %}guardrail{% else %}summary{% endif %}
   </div>
   <p class="mt-1 whitespace-pre-wrap {% if step.payload.kind == 'guardrail' %}text-rose-800{% else %}text-slate-800{% endif %}">{{ step.payload.text }}</p>
 
 {% elif step.type == 'tool_call' %}
   <div class="flex items-baseline gap-2">
-    <span class="rounded px-1.5 text-xs font-medium
-      {% if step.tool_class == 'READ' %}bg-sky-100 text-sky-800
-      {% elif step.tool_class == 'DRAFT' %}bg-violet-100 text-violet-800
+    <span class="rounded px-1.5 text-xs font-semibold
+      {% if step.tool_class == 'READ' %}bg-sky-100 text-sky-900
+      {% elif step.tool_class == 'DRAFT' %}bg-violet-100 text-violet-900
       {% else %}bg-slate-100 text-slate-700{% endif %}">{{ step.tool_class }}</span>
     <span class="mono text-slate-900">{{ step.tool_name }}</span>
   </div>
-  <pre class="mt-1 overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.arguments | tojson }}</pre>
+  <pre class="mt-1.5 overflow-x-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.arguments | tojson }}</pre>
 
 {% else %}
-  <details>
-    <summary class="cursor-pointer text-xs {% if step.payload.is_error %}text-rose-700{% else %}text-slate-500{% endif %}">
+  <details class="border-l-2 border-slate-100 pl-3">
+    <summary class="cursor-pointer text-xs hover:underline {% if step.payload.is_error %}text-rose-700{% else %}text-slate-500{% endif %}">
       {% if step.payload.is_error %}refused{% else %}result{% endif %} · {{ step.tool_name }}
     </summary>
-    <pre class="mt-1 max-h-64 overflow-auto rounded bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.result | tojson(indent=2) }}</pre>
+    <pre class="mt-1.5 max-h-64 overflow-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.result | tojson(indent=2) }}</pre>
   </details>
 {% endif %}
 </li>

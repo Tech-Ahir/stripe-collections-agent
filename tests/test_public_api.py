@@ -567,6 +567,92 @@ def test_a_scripted_run_is_badged_so_it_cannot_pass_for_a_model_run(api):
 
 
 # ----------------------------------------------------------------------------------
+# The HTMX fragments, which are where a decision is actually reported
+# ----------------------------------------------------------------------------------
+#
+# These are the panels a reviewer reads immediately after clicking Approve or Reject, so
+# they carry the whole weight of section 6's "the refusal is the feature". Rendering them
+# in tests also means a broken template shows up here rather than in front of a client:
+# every other screen is server-rendered on a GET, but these four only exist after a POST.
+
+
+def test_the_panel_after_a_send_lists_the_seven_checks(api, pending, monkeypatch):
+    stub_into(monkeypatch, StubGateway())
+    panel = api.post(f"/ui/proposals/{pending}/approve", data={"note": "", "body": ""}).text
+
+    assert "The seven checks that had to pass" in panel
+    for number, name in enumerate(
+        [
+            "hmac_signature_valid",
+            "token_not_expired",
+            "nonce_unused",
+            "proposal_is_approved",
+            "approval_matches_approver",
+            "payload_hash_matches",
+            "idempotency_key_unused",
+        ],
+        start=1,
+    ):
+        assert f"{number}. {name}" in panel
+
+
+def test_the_panel_after_a_refusal_shows_the_code_and_how_far_it_got(api, pending, monkeypatch):
+    """Section 6: the code surfaces unchanged, and prominently."""
+    stub_into(monkeypatch, StubGateway(refusal("not_approved", status=403, failed_check=4)))
+    panel = api.post(f"/ui/proposals/{pending}/approve", data={"note": "", "body": ""}).text
+
+    assert "not_approved" in panel
+    assert "nothing was sent" in panel
+    assert "refused at check 4" in panel
+    assert "Checks that passed before the refusal" in panel
+    assert "4. refused here" in panel
+
+
+def test_the_unapproved_attempt_panel_makes_the_point_of_the_architecture(
+    api, pending, monkeypatch
+):
+    stub_into(monkeypatch, StubGateway(refusal("not_approved", status=403, failed_check=4)))
+    panel = api.post(f"/ui/proposals/{pending}/attempt-unapproved").text
+
+    assert "This is the point of the architecture." in panel
+    assert "correctly" in panel and "signed" in panel
+
+
+def test_the_panel_after_an_edit_shows_both_hashes(api, pending):
+    panel = api.post(f"/ui/proposals/{pending}/edit", data={"body": "Rewritten by hand."}).text
+
+    assert "Edit saved." in panel
+    assert "was" in panel and "now" in panel
+
+
+def test_the_panel_after_a_rejection_says_it_is_terminal(api, pending):
+    panel = api.post(f"/ui/proposals/{pending}/reject", data={"note": "already paid"}).text
+
+    assert "recorded" in panel
+    assert "not_approved" in panel
+
+
+def test_the_verify_chain_fragment_renders_the_answer(api, pending):
+    panel = api.get("/ui/audit/verify").text
+
+    assert "intact" in panel
+    assert "events recomputed" in panel
+
+
+def test_the_run_proposal_fragment_renders(api):
+    from tests.factories import make_run
+
+    with session_scope() as session:
+        run = make_run(session)
+        run_id = run.id
+        make_proposal(session, run=run, status="pending")
+
+    panel = api.get(f"/ui/runs/{run_id}/proposals").text
+    assert "awaiting approval" in panel
+    assert "review" in panel
+
+
+# ----------------------------------------------------------------------------------
 # The refusal is answered with the gateway's own status code
 # ----------------------------------------------------------------------------------
 
