@@ -6,13 +6,19 @@ four screens cannot drift apart: the templates render these same dictionaries.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.store.repositories import expire_stale_proposals
+from app.store.repositories import (
+    expire_stale_proposals,
+    settle_decided_runs,
+    settle_run_if_decided,
+)
 from shared.audit import verify_chain
+from shared.clock import start_of_utc_day
 from shared.db import session_scope
 from shared.models import (
     Approval,
@@ -23,6 +29,9 @@ from shared.models import (
     Run,
     RunStep,
 )
+
+log = logging.getLogger("app.api.queries")
+
 
 # ----------------------------------------------------------------------------------
 # Runs
@@ -74,6 +83,9 @@ def _run_dict(run: Run, counts: dict[str, int]) -> dict[str, Any]:
 
 def list_runs(*, limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
     with session_scope() as session:
+        # A run waiting on a queue with nothing left in it is not waiting on anything.
+        # Settling here means rows that went stale before this existed heal on first read.
+        settle_decided_runs(session)
         runs = list(
             session.execute(
                 select(Run).order_by(Run.started_at.desc()).limit(limit).offset(offset)
@@ -97,6 +109,8 @@ def step_dict(step: RunStep) -> dict[str, Any]:
 
 def get_run(run_id: str, *, after_seq: int = 0) -> dict[str, Any] | None:
     with session_scope() as session:
+        expire_stale_proposals(session)
+        settle_run_if_decided(session, run_id)
         run = session.get(Run, run_id)
         if run is None:
             return None
@@ -244,27 +258,145 @@ def get_proposal(proposal_id: str) -> dict[str, Any] | None:
                         .order_by(Execution.id)
                     ).scalars()
                 ],
-                "payment_history": [],
+                "payment_history": payment_history_seen_by_the_agent(
+                    session, run_id=proposal.run_id, customer_id=payload.get("customer_id")
+                ),
             }
         )
         return detail
 
 
+def payment_history_seen_by_the_agent(
+    session: Session, *, run_id: str, customer_id: str | None
+) -> list[dict[str, Any]]:
+    """The payment history the agent actually read, taken from the run transcript.
+
+    Section 9 puts payment history between the invoice facts and the letter, so the operator
+    can see the basis for the tone the agent chose. It is read back out of the transcript
+    rather than re-fetched from Stripe for a reason: what matters to a reviewer is what the
+    agent *saw* when it decided, not what Stripe says a moment later.
+
+    Returns an empty list when the agent did not look -- which is itself information, and the
+    UI says so rather than showing a blank panel.
+    """
+    if not customer_id:
+        return []
+
+    steps = list(
+        session.execute(
+            select(RunStep)
+            .where(RunStep.run_id == run_id, RunStep.tool_name == "get_payment_history")
+            .order_by(RunStep.seq)
+        ).scalars()
+    )
+
+    # Paired by ADJACENCY, not by tool_use_id.
+    #
+    # The loop persists a call and then its result, so in sequence order every tool_result is
+    # preceded by the tool_call it answers. An earlier version keyed a lookup on tool_use_id
+    # instead, which looked obviously right and was wrong: a run asking about three customers
+    # produced three calls all carrying `toolu_0`, the map collapsed them to the last one, and
+    # every proposal but one showed an empty history panel. Ids are only guaranteed unique
+    # within one assistant turn, so the ordering the loop already maintains is the stronger
+    # signal. The id is still checked when both sides carry one.
+    found: list[dict[str, Any]] = []
+    asked_about: str | None = None
+    asked_id: str | None = None
+    for step in steps:
+        payload = step.payload or {}
+        if step.type == "tool_call":
+            asked_about = (payload.get("arguments") or {}).get("customer_id")
+            asked_id = payload.get("tool_use_id")
+            continue
+        if step.type != "tool_result" or payload.get("is_error"):
+            asked_about = asked_id = None
+            continue
+        result_id = payload.get("tool_use_id")
+        if asked_id and result_id and asked_id != result_id:
+            asked_about = asked_id = None
+            continue
+        if asked_about == customer_id:
+            result = payload.get("result") or {}
+            history = result.get("history") if isinstance(result, dict) else None
+            if isinstance(history, list):
+                found = history  # keep the most recent look at this customer
+        asked_about = asked_id = None
+    return found
+
+
 def proposal_counters() -> dict[str, int]:
+    """Section 9's counters: pending proposals, approved today, sent today.
+
+    "Today" is the current UTC day. A single operator identity has no timezone of its own and
+    the audit log is UTC throughout, so any other day boundary would make the counters
+    disagree with the log.
+
+    "Sent today" counts **succeeded executions**, not outbox rows. The outbox is one of three
+    adapters: with ``EMAIL_ADAPTER=smtp`` or ``resend`` there is no outbox row to count, and
+    the counter would have read zero while letters were going out.
+    """
+    since = start_of_utc_day()
     with session_scope() as session:
         expire_stale_proposals(session)
         by_status = dict(
             session.execute(select(Proposal.status, func.count()).group_by(Proposal.status)).all()
         )
+        approved_today = session.execute(
+            select(func.count())
+            .select_from(Approval)
+            .where(Approval.decision == "approve", Approval.decided_at >= since)
+        ).scalar_one()
+        sent_today = session.execute(
+            select(func.count())
+            .select_from(Execution)
+            .where(Execution.status == "succeeded", Execution.executed_at >= since)
+        ).scalar_one()
         return {
             "pending": by_status.get("pending", 0),
+            "approved_today": approved_today,
+            "sent_today": sent_today,
             "approved": by_status.get("approved", 0),
             "rejected": by_status.get("rejected", 0),
             "executed": by_status.get("executed", 0),
             "failed": by_status.get("failed", 0),
             "expired": by_status.get("expired", 0),
-            "sent": session.execute(select(func.count()).select_from(OutboxMessage)).scalar_one(),
+            "sent_total": session.execute(
+                select(func.count()).select_from(OutboxMessage)
+            ).scalar_one(),
         }
+
+
+#: Section 9 asks for an overdue-invoice counter on the dashboard, which means a Stripe call
+#: on a page load. Cached briefly so repeatedly opening the dashboard does not hammer the API,
+#: and degraded to ``None`` rather than failing the page when Stripe cannot be reached -- a
+#: counter must never be the reason a screen 500s.
+_OVERDUE_CACHE: dict[str, Any] = {"count": None, "at": 0.0}
+OVERDUE_CACHE_SECONDS = 60.0
+
+
+def overdue_invoice_count(*, force: bool = False) -> int | None:
+    """How many invoices are open and past due, or ``None`` if Stripe could not be asked."""
+    import time
+
+    if not force and time.monotonic() - float(_OVERDUE_CACHE["at"]) < OVERDUE_CACHE_SECONDS:
+        return _OVERDUE_CACHE["count"]
+
+    from app.config import settings
+    from app.stripe_client.read import StripeReadClient
+
+    config = settings()
+    try:
+        reader = StripeReadClient(
+            config.stripe_api_key_read,
+            include_test_clock_fixtures=config.stripe_include_test_clock_invoices,
+        )
+        count: int | None = len(reader.list_overdue_invoices(min_days_overdue=1, limit=100))
+    except Exception as exc:  # noqa: BLE001 - a counter must not take the page down
+        log.info("overdue counter unavailable: %s", exc)
+        count = None
+
+    _OVERDUE_CACHE.update({"count": count, "at": time.monotonic()})
+    return count
 
 
 # ----------------------------------------------------------------------------------

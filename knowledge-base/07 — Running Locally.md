@@ -20,7 +20,7 @@ python -c "import secrets; print(secrets.token_hex(32))"   # paste into APPROVAL
 docker compose up -d --build --wait
 
 # 3. Seed Stripe test mode: six customers, eight invoices, 3 to 95 days overdue
-docker compose run --rm --entrypoint python tests scripts/seed_stripe_test_data.py --recreate
+docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate
 
 # 4. Open it
 #    http://localhost:8000
@@ -125,7 +125,7 @@ The Stripe fixture is **not** in that volume — it lives in your Stripe test ac
 separately:
 
 ```bash
-docker compose run --rm --entrypoint python tests scripts/seed_stripe_test_data.py --destroy
+docker compose run --rm seed scripts/seed_stripe_test_data.py --destroy
 ```
 
 ## Troubleshooting

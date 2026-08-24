@@ -37,15 +37,19 @@
 
   {# --- Counters ---------------------------------------------------------------- #}
   <section class="lg:col-span-2 space-y-6">
+    {# Section 9: "Counters: overdue invoices, pending proposals, approved today, sent today." #}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {% for label, value, tone in [
-        ('Pending approval', counters.pending, 'amber'),
-        ('Approved', counters.approved, 'blue'),
-        ('Sent', counters.sent, 'emerald'),
-        ('Rejected', counters.rejected, 'slate')
+      {% for label, value, hint in [
+        ('Overdue invoices', overdue, 'Open and past due in Stripe right now'),
+        ('Pending approval', counters.pending, 'Letters waiting for a human decision'),
+        ('Approved today', counters.approved_today, 'Approvals recorded since midnight UTC'),
+        ('Sent today', counters.sent_today, 'Executions the gateway completed since midnight UTC')
       ] %}
-      <div class="rounded border border-slate-200 bg-white p-4">
-        <div class="text-2xl font-semibold tabular-nums">{{ value }}</div>
+      <div class="rounded border border-slate-200 bg-white p-4" title="{{ hint }}">
+        <div class="text-2xl font-semibold tabular-nums">
+          {% if value is none %}<span class="text-slate-300" title="Stripe could not be reached">&mdash;</span>
+          {% else %}{{ value }}{% endif %}
+        </div>
         <div class="mt-0.5 text-xs text-slate-500">{{ label }}</div>
       </div>
       {% endfor %}

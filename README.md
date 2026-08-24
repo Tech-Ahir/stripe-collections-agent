@@ -44,7 +44,7 @@ Six customers and eight invoices, overdue from 3 to 95 days, including one custo
 address and one invoice already paid — so the agent's filtering is visible rather than assumed.
 
 ```bash
-docker compose run --rm --entrypoint python tests scripts/seed_stripe_test_data.py --recreate
+docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate
 ```
 
 ```
@@ -239,7 +239,7 @@ docker compose up -d --build --wait
 The Stripe fixture lives in your Stripe test account, not in that volume:
 
 ```bash
-docker compose run --rm --entrypoint python tests scripts/seed_stripe_test_data.py --destroy
+docker compose run --rm seed scripts/seed_stripe_test_data.py --destroy
 ```
 
 ---

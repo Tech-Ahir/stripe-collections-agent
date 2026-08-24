@@ -258,6 +258,7 @@ def build_run_context(
     run_id: str,
     settings: AppSettings,
     reader: StripeReadClient | None = None,
+    min_days_overdue_floor: int = 1,
 ) -> tuple[RunStore, ToolRegistry]:
     """One store and one toolset per run, sharing a single Stripe customer cache."""
     store = RunStore(run_id)
@@ -270,5 +271,6 @@ def build_run_context(
         store=store,
         max_proposals=settings.max_proposals_per_run,
         ttl_hours=settings.proposal_ttl_hours,
+        min_days_overdue_floor=min_days_overdue_floor,
     )
     return store, registry

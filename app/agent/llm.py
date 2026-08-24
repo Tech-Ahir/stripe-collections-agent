@@ -17,6 +17,7 @@ Two details of the real client that are easy to get wrong on Claude Sonnet 5:
 
 from __future__ import annotations
 
+import itertools
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -74,7 +75,14 @@ class LLMUnavailable(RuntimeError):
 
 
 class AnthropicLLM:
-    def __init__(self, *, api_key: str, model: str, max_tokens: int = MAX_TOKENS) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        max_tokens: int = MAX_TOKENS,
+        timeout_seconds: float | None = None,
+    ) -> None:
         if not api_key:
             raise LLMUnavailable(
                 "ANTHROPIC_API_KEY is not configured, so the agent cannot run. Everything "
@@ -84,7 +92,14 @@ class AnthropicLLM:
             )
         import anthropic
 
-        self._client = anthropic.Anthropic(api_key=api_key)
+        # A ceiling on a single request. Without one, a wedged call holds a worker thread
+        # indefinitely and its run sits at "running" until the process restarts -- which is
+        # exactly the state the dashboard was found in.
+        self._client = (
+            anthropic.Anthropic(api_key=api_key, timeout=timeout_seconds)
+            if timeout_seconds
+            else anthropic.Anthropic(api_key=api_key)
+        )
         self._model = model
         self._max_tokens = max_tokens
 
@@ -111,6 +126,11 @@ class AnthropicLLM:
             )
         except anthropic.APIStatusError as exc:
             raise LLMUnavailable(f"Anthropic returned HTTP {exc.status_code}: {exc}") from exc
+        except anthropic.APITimeoutError as exc:
+            raise LLMUnavailable(
+                "Anthropic did not respond within this run's time budget "
+                f"(RUN_TIMEOUT_SECONDS): {exc}"
+            ) from exc
         except anthropic.APIConnectionError as exc:
             raise LLMUnavailable(f"Could not reach Anthropic: {exc}") from exc
 
@@ -213,6 +233,13 @@ def _synthesise_content(turn: LLMResponse) -> list[dict[str, Any]]:
     return content
 
 
+#: Scripted tool-call ids are minted from one counter for the whole process, not per turn.
+#: Numbering them per turn gave every turn a `toolu_0`, which is wrong in the same way the
+#: real API would never be: ids collided across turns, and code that keyed anything on them
+#: silently matched the wrong call. Found via an empty payment-history panel.
+_scripted_tool_call_seq = itertools.count(1)
+
+
 def turn(
     *,
     thinking: list[str] | None = None,
@@ -222,8 +249,8 @@ def turn(
 ) -> LLMResponse:
     """Terse constructor for a scripted turn."""
     calls = [
-        ToolCall(id=f"toolu_{index}", name=name, arguments=arguments)
-        for index, (name, arguments) in enumerate(tools or [])
+        ToolCall(id=f"toolu_{next(_scripted_tool_call_seq):04d}", name=name, arguments=arguments)
+        for name, arguments in (tools or [])
     ]
     return LLMResponse(
         stop_reason=stop_reason or ("tool_use" if calls else "end_turn"),

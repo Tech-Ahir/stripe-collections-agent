@@ -29,16 +29,26 @@ def _guard(operation):
     return wrapped
 
 
-def build_read_tools(reader: StripeReadClient) -> list[ToolSpec]:
-    """The four READ tools, bound to one run's Stripe client (and its customer cache)."""
+def build_read_tools(
+    reader: StripeReadClient, *, min_days_overdue_floor: int = 1
+) -> list[ToolSpec]:
+    """The four READ tools, bound to one run's Stripe client (and its customer cache).
+
+    ``min_days_overdue_floor`` is the operator's instruction for this run. The model may ask
+    for a *higher* threshold if it judges that appropriate, but it cannot go below the floor.
+    An operator who said "nothing under thirty days" has said something about what they are
+    willing to be asked to approve, and a line in the prompt asking the model to respect that
+    is a request rather than a rule -- the same reasoning as every other guardrail here.
+    """
 
     def list_overdue_invoices(
-        min_days_overdue: int | None = 1,
+        min_days_overdue: int | None = None,
         limit: int | None = 25,
         min_amount_cents: int | None = None,
     ) -> dict[str, Any]:
+        requested = min_days_overdue_floor if min_days_overdue is None else int(min_days_overdue)
         invoices = reader.list_overdue_invoices(
-            min_days_overdue=1 if min_days_overdue is None else max(0, int(min_days_overdue)),
+            min_days_overdue=max(min_days_overdue_floor, requested),
             limit=25 if limit is None else max(1, min(int(limit), 100)),
             min_amount_cents=None if min_amount_cents is None else int(min_amount_cents),
         )
@@ -87,7 +97,11 @@ def build_read_tools(reader: StripeReadClient) -> list[ToolSpec]:
                 {
                     "min_days_overdue": {
                         "type": nullable("integer"),
-                        "description": "Ignore invoices less overdue than this. Default 1.",
+                        "description": (
+                            "Ignore invoices less overdue than this. Null uses the floor the "
+                            "operator set for this run. A value below that floor is raised to "
+                            "it; a higher value is honoured."
+                        ),
                     },
                     "limit": {
                         "type": nullable("integer"),

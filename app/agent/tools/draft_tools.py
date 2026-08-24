@@ -124,6 +124,9 @@ def build_draft_tool(
             "action_type": "send_collection_letter",
             "invoice_id": invoice_id,
             "invoice_number": facts.get("invoice_number") or facts.get("number"),
+            # Carried so the approval screen can show the payment history the agent read
+            # for this customer, which section 9 puts between the facts and the letter.
+            "customer_id": facts.get("customer_id"),
             "customer_name": facts.get("customer_name"),
             "customer_email": facts.get("customer_email"),
             "amount_due": facts.get("amount_due"),

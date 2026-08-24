@@ -138,6 +138,28 @@ def rationale_for(facts: dict, tone: str, history: dict | None) -> str:
     return "; ".join(parts) + "."
 
 
+def refusal_reasons(run_id: str) -> list[str]:
+    """Which errors the draft tool returned during this run, for a readable summary."""
+    from sqlalchemy import select
+
+    from shared.db import session_scope
+    from shared.models import RunStep
+
+    with session_scope() as session:
+        steps = session.execute(
+            select(RunStep).where(
+                RunStep.run_id == run_id,
+                RunStep.type == "tool_result",
+                RunStep.tool_name == "propose_collection_letter",
+            )
+        ).scalars()
+        return [
+            (step.payload.get("result") or {}).get("error", "unknown")
+            for step in steps
+            if step.payload.get("is_error")
+        ]
+
+
 def main() -> int:
     config = settings()
     ensure_schema()
@@ -248,9 +270,30 @@ def main() -> int:
     print(f"  proposals  : {outcome.proposals}")
     if skipped:
         print(f"  skipped    : {len(skipped)} undeliverable")
+
+    if not outcome.proposals:
+        # Almost always the one-pending-proposal-per-invoice rule doing its job on a second
+        # run, which is a success rather than a failure. Saying so beats a bare "0 proposals"
+        # under a cheerful "open the queue" message and an exit code that reads like a fault.
+        refusals = refusal_reasons(run_id)
+        duplicates = refusals.count("duplicate_pending_proposal")
+        if duplicates:
+            print(
+                f"\n{YELLOW}Nothing new to propose: {duplicates} invoice(s) already have a "
+                f"pending letter waiting for a decision.{RESET}"
+            )
+            print(f"{DIM}One pending proposal per invoice is enforced by the store.{RESET}")
+            print(f"{GREEN}Review the existing queue: http://localhost:8000/proposals{RESET}\n")
+            return 0
+        if refusals:
+            print(f"\n{YELLOW}Every draft was refused: {sorted(set(refusals))}{RESET}\n")
+        else:
+            print(f"\n{YELLOW}No deliverable overdue invoices to work with.{RESET}\n")
+        return 1
+
     print(f"\n{GREEN}Open http://localhost:8000/proposals to review them.{RESET}")
     print(f"{DIM}No model was called. The run is badged as scripted in the UI.{RESET}\n")
-    return 0 if outcome.proposals else 1
+    return 0
 
 
 if __name__ == "__main__":

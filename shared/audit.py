@@ -37,6 +37,8 @@ from shared.types import format_utc
 
 RUN_STARTED = "run.started"
 RUN_COMPLETED = "run.completed"
+RUN_SETTLED = "run.settled"
+RUN_ABANDONED = "run.abandoned"
 RUN_FAILED = "run.failed"
 AGENT_TOOL_CALLED = "agent.tool.called"
 PROPOSAL_CREATED = "proposal.created"

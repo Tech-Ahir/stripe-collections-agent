@@ -105,17 +105,24 @@ def _execute(
         if model is None:
             # A missing key is a configuration fact, not a crash. run_agent turns
             # LLMUnavailable into a failed run with a readable reason.
-            model = AnthropicLLM(api_key=settings.anthropic_api_key, model=settings.anthropic_model)
+            model = AnthropicLLM(
+                api_key=settings.anthropic_api_key,
+                model=settings.anthropic_model,
+                # Bound one request by the run's budget, so a wedged call fails the run
+                # instead of holding a worker and leaving the status at "running" forever.
+                timeout_seconds=settings.run_timeout_seconds,
+            )
     except LLMUnavailable as exc:
         log.warning("run %s cannot start: %s", run_id, exc)
         store.set_status("failed", error=str(exc))
         return
 
     try:
-        store, registry = _context(run_id, settings)
-        # The operator's floor for this run, applied by the tool's own default so the model
-        # still chooses whether to widen it.
-        registry.default_min_days_overdue = min_days_overdue  # type: ignore[attr-defined]
+        # The operator's floor goes to the tool that enforces it, not to an attribute
+        # nothing reads. The model may still widen it; it cannot go under it.
+        store, registry = build_run_context(
+            run_id=run_id, settings=settings, min_days_overdue_floor=min_days_overdue
+        )
         outcome = run_agent(
             run_id=run_id,
             goal=(
@@ -140,7 +147,3 @@ def _execute(
             store.set_status("failed", error="the run crashed unexpectedly")
         except Exception:  # noqa: BLE001
             log.exception("could not even mark run %s failed", run_id)
-
-
-def _context(run_id: str, settings: AppSettings):
-    return build_run_context(run_id=run_id, settings=settings)

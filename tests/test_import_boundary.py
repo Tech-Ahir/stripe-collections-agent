@@ -189,3 +189,12 @@ def test_blank_action_credential_is_not_treated_as_present():
 
     assert find_action_credentials({"STRIPE_API_KEY_WRITE": ""}) == []
     assert find_action_credentials({"STRIPE_API_KEY_WRITE": "   "}) == []
+
+
+def test_the_seed_key_counts_as_an_action_credential():
+    """It is a standard write-capable key; "only a script uses it" is intent, not capability."""
+    from app.guards import ACTION_CREDENTIAL_VARS, BoundaryViolation, assert_no_action_credentials
+
+    assert "STRIPE_API_KEY_SEED" in ACTION_CREDENTIAL_VARS
+    with pytest.raises(BoundaryViolation):
+        assert_no_action_credentials({"STRIPE_API_KEY_SEED": "sk_test_write_capable"})

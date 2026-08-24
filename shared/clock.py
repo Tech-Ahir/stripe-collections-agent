@@ -30,6 +30,17 @@ def seconds_from_now(seconds: float) -> datetime:
     return now_utc() + timedelta(seconds=seconds)
 
 
+def start_of_utc_day(at: datetime | None = None) -> datetime:
+    """Midnight UTC on the day of ``at``.
+
+    "Today" for the dashboard's counters. A single operator identity has no timezone of its
+    own, and the audit log is UTC throughout, so a local-time day boundary would make the
+    counters disagree with the log.
+    """
+    moment = as_utc(at) if at is not None else now_utc()
+    return moment.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def to_epoch(value: datetime) -> int:
     return int(as_utc(value).timestamp())
 

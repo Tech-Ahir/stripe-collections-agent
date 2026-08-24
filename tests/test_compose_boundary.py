@@ -190,3 +190,51 @@ def test_the_test_image_is_the_only_one_holding_both_services():
 
 def test_the_test_runner_never_starts_with_docker_compose_up(compose):
     assert compose["services"]["tests"]["profiles"] == ["test"]
+
+
+# ----------------------------------------------------------------------------------
+# The seeding credential, and the command the README promises
+# ----------------------------------------------------------------------------------
+
+
+def test_the_seed_key_lives_in_exactly_one_service(compose):
+    """It is a standard, write-capable Stripe key. Only the one-off container may see it."""
+    holders = {
+        name
+        for name, service in compose["services"].items()
+        if "STRIPE_API_KEY_SEED" in _env_keys(service)
+    }
+    assert holders == {"seed"}, f"STRIPE_API_KEY_SEED should be on `seed` alone, found {holders}"
+
+
+def test_the_seed_service_never_starts_with_docker_compose_up(compose):
+    assert compose["services"]["seed"]["profiles"] == ["seed"]
+
+
+def test_the_seed_service_serves_no_traffic(compose):
+    seed = compose["services"]["seed"]
+    assert "ports" not in seed
+    assert seed["entrypoint"] == ["python"], "a one-off runner, not a server"
+
+
+def test_the_readme_seed_command_names_a_service_that_has_the_key(compose):
+    """The first version of this command used the `tests` service, which has no Stripe key.
+
+    So the README's own quickstart step failed, which is worse than a missing step: it makes
+    the ten-minute promise untrue for anyone following it literally. This test reads the
+    command out of the README and checks the service it names can actually run it.
+    """
+    import re
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    commands = re.findall(
+        r"docker compose run --rm (?:--entrypoint python )?([a-z]+) "
+        r"scripts/seed_stripe_test_data\.py",
+        readme,
+    )
+    assert commands, "the README should document how to seed"
+    for service in set(commands):
+        assert service in compose["services"], f"README names unknown service {service!r}"
+        assert "STRIPE_API_KEY_SEED" in _env_keys(compose["services"][service]), (
+            f"README tells the reader to seed with `{service}`, which has no Stripe key"
+        )

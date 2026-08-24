@@ -149,9 +149,10 @@ def build_registry(
     store: RunStore,
     max_proposals: int,
     ttl_hours: int,
+    min_days_overdue_floor: int = 1,
 ) -> ToolRegistry:
     """Assemble one run's toolset. Four READ tools and one DRAFT tool. Nothing else."""
-    registry = ToolRegistry(build_read_tools(reader))
+    registry = ToolRegistry(build_read_tools(reader, min_days_overdue_floor=min_days_overdue_floor))
     registry._tools["propose_collection_letter"] = build_draft_tool(
         store=store,
         facts_by_invoice=registry.facts_by_invoice,

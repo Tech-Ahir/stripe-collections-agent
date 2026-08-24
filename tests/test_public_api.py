@@ -646,3 +646,272 @@ def test_the_probe_still_refuses_the_one_status_that_could_execute(api, pending,
 
 def test_attempting_a_proposal_that_does_not_exist_is_a_404(api):
     assert api.post("/v1/proposals/nope/attempt-unapproved").status_code == 404
+
+
+# ----------------------------------------------------------------------------------
+# The dashboard's counters (section 9), and the fields behind them
+# ----------------------------------------------------------------------------------
+
+
+def test_the_counters_are_the_four_section_9_asks_for(api, pending, monkeypatch):
+    """ "Counters: overdue invoices, pending proposals, approved today, sent today."
+
+    The first version shipped all-time totals and no overdue counter, which reads as a
+    different thing entirely: "3 sent" says nothing about whether anything happened today.
+    """
+    from app.api import queries
+
+    counters = queries.proposal_counters()
+    for key in ("pending", "approved_today", "sent_today"):
+        assert key in counters, f"section 9 needs {key}"
+
+    assert counters["pending"] == 1
+    assert counters["approved_today"] == 0
+    assert counters["sent_today"] == 0
+
+    monkeypatch.setattr(queries, "overdue_invoice_count", lambda **_: 7)
+    page = api.get("/").text
+    assert "Overdue invoices" in page
+    assert "Approved today" in page
+    assert "Sent today" in page
+
+
+def test_approving_moves_approved_today_but_not_a_stale_yesterday(api, pending, monkeypatch):
+    from datetime import timedelta
+
+    from app.api import queries
+    from shared.clock import now_utc
+    from shared.models import Approval as ApprovalModel
+
+    stub_into(monkeypatch, StubGateway())
+    api.post(f"/v1/proposals/{pending}/approve", json={})
+    assert queries.proposal_counters()["approved_today"] == 1
+
+    # Back-date it and it should drop out of "today".
+    with session_scope() as session:
+        session.query(ApprovalModel).one().decided_at = now_utc() - timedelta(days=2)
+    assert queries.proposal_counters()["approved_today"] == 0
+
+
+def test_sent_today_counts_executions_not_outbox_rows(api, pending, monkeypatch):
+    """With EMAIL_ADAPTER=smtp or resend there is no outbox row at all.
+
+    Counting outbox rows made the counter read zero while letters were going out.
+    """
+    from app.api import queries
+    from shared.clock import now_utc
+    from shared.models import Execution
+
+    with session_scope() as session:
+        session.add(
+            Execution(
+                proposal_id=pending,
+                idempotency_key="k-today",
+                status="succeeded",
+                executed_at=now_utc(),
+            )
+        )
+
+    counters = queries.proposal_counters()
+    assert counters["sent_today"] == 1
+    assert counters["sent_total"] == 0, "no outbox row exists, and that is the point"
+
+
+def test_the_overdue_counter_degrades_to_none_rather_than_failing_the_page(api, monkeypatch):
+    """A counter must never 500 the dashboard."""
+    from app.api import queries
+    from app.stripe_client.read import StripeReadError
+
+    def unavailable(*_a, **_k):
+        raise StripeReadError("Stripe is down", code="stripe_error")
+
+    monkeypatch.setattr("app.stripe_client.read.StripeReadClient.__init__", unavailable)
+    queries._OVERDUE_CACHE.update({"count": None, "at": 0.0})
+
+    assert queries.overdue_invoice_count(force=True) is None
+    assert api.get("/").status_code == 200
+
+
+def test_the_overdue_counter_is_cached_so_the_dashboard_does_not_hammer_stripe(api, monkeypatch):
+    from app.api import queries
+
+    calls = {"n": 0}
+
+    class Counting:
+        def __init__(self, *_a, **_k):
+            calls["n"] += 1
+
+        def list_overdue_invoices(self, **_k):
+            return [{"id": "in_1"}, {"id": "in_2"}]
+
+    monkeypatch.setattr("app.stripe_client.read.StripeReadClient", Counting)
+    queries._OVERDUE_CACHE.update({"count": None, "at": 0.0})
+
+    assert queries.overdue_invoice_count(force=True) == 2
+    assert queries.overdue_invoice_count() == 2
+    assert queries.overdue_invoice_count() == 2
+    assert calls["n"] == 1, "three reads, one Stripe call"
+
+
+# ----------------------------------------------------------------------------------
+# Payment history: declared in the API and the section 9 layout, and it used to be empty
+# ----------------------------------------------------------------------------------
+
+
+def _run_with_history(customer_id: str, history: list[dict]) -> tuple[str, str]:
+    """A run whose transcript contains a get_payment_history call and its result."""
+    from app.store.repositories import RunStore
+
+    run_id = RunStore.create(goal="g", operator_id="op@x", params={})
+    store = RunStore(run_id)
+    store.append_step(
+        type="tool_call",
+        tool_name="get_payment_history",
+        payload={"tool_use_id": "t1", "arguments": {"customer_id": customer_id}},
+    )
+    store.append_step(
+        type="tool_result",
+        tool_name="get_payment_history",
+        payload={"tool_use_id": "t1", "is_error": False, "result": {"history": history}},
+    )
+    return run_id, "t1"
+
+
+HISTORY = [
+    {
+        "invoice_id": "in_old",
+        "number": "INV-0900",
+        "status": "paid",
+        "amount_due_display": "$1,200.00",
+        "due_date": "2025-09-01",
+        "outcome": "paid on time",
+    }
+]
+
+
+def test_the_proposal_detail_shows_the_history_the_agent_actually_read(api):
+    from shared.models import Run
+
+    run_id, _ = _run_with_history("cus_acme", HISTORY)
+    with session_scope() as session:
+        run = session.get(Run, run_id)
+        payload = letter_payload()
+        payload["customer_id"] = "cus_acme"
+        proposal = make_proposal(session, run=run, payload=payload)
+        proposal_id = proposal.id
+
+    detail = api.get(f"/v1/proposals/{proposal_id}").json()
+
+    assert detail["payment_history"] == HISTORY
+    assert "paid on time" in api.get(f"/proposals?selected={proposal_id}").text
+
+
+def test_history_from_a_different_customer_is_not_attributed_to_this_one(api):
+    """The transcript may hold several customers' histories. Pair them by tool_use_id."""
+    from shared.models import Run
+
+    run_id, _ = _run_with_history("cus_someone_else", HISTORY)
+    with session_scope() as session:
+        run = session.get(Run, run_id)
+        payload = letter_payload()
+        payload["customer_id"] = "cus_acme"
+        proposal_id = make_proposal(session, run=run, payload=payload).id
+
+    assert api.get(f"/v1/proposals/{proposal_id}").json()["payment_history"] == []
+
+
+def test_a_proposal_whose_agent_never_looked_says_so(api, pending):
+    """An empty panel is ambiguous; "it did not look" is information."""
+    detail = api.get(f"/v1/proposals/{pending}").json()
+    assert detail["payment_history"] == []
+    assert "did not look up" in api.get(f"/proposals?selected={pending}").text
+
+
+def test_a_failed_history_call_is_not_shown_as_history(api):
+    from app.store.repositories import RunStore
+    from shared.models import Run
+
+    run_id = RunStore.create(goal="g", operator_id="op@x", params={})
+    store = RunStore(run_id)
+    store.append_step(
+        type="tool_call",
+        tool_name="get_payment_history",
+        payload={"tool_use_id": "t1", "arguments": {"customer_id": "cus_acme"}},
+    )
+    store.append_step(
+        type="tool_result",
+        tool_name="get_payment_history",
+        payload={"tool_use_id": "t1", "is_error": True, "result": {"error": "stripe_error"}},
+    )
+    with session_scope() as session:
+        run = session.get(Run, run_id)
+        payload = letter_payload()
+        payload["customer_id"] = "cus_acme"
+        proposal_id = make_proposal(session, run=run, payload=payload).id
+
+    assert api.get(f"/v1/proposals/{proposal_id}").json()["payment_history"] == []
+
+
+def test_history_is_paired_by_order_not_by_tool_use_id(api):
+    """The bug this fixed: three customers, three calls, all carrying `toolu_0`.
+
+    Keying the lookup on tool_use_id collapsed them to the last one, so every proposal but
+    one showed an empty history panel. The loop already persists a call immediately before
+    its result, so sequence order is the stronger signal.
+    """
+    from app.store.repositories import RunStore
+    from shared.models import Run
+
+    run_id = RunStore.create(goal="g", operator_id="op@x", params={})
+    store = RunStore(run_id)
+    wanted = [
+        {
+            "invoice_id": "in_w",
+            "status": "paid",
+            "amount_due_display": "$1.00",
+            "outcome": "paid on time",
+            "number": "INV-W",
+            "due_date": "2025-01-01",
+        }
+    ]
+    other = [
+        {
+            "invoice_id": "in_o",
+            "status": "open",
+            "amount_due_display": "$2.00",
+            "outcome": "still unpaid",
+            "number": "INV-O",
+            "due_date": "2025-01-01",
+        }
+    ]
+
+    # Every call deliberately reuses the SAME id, as the old scripted helper did.
+    for customer, history in [("cus_first", other), ("cus_target", wanted), ("cus_last", other)]:
+        store.append_step(
+            type="tool_call",
+            tool_name="get_payment_history",
+            payload={"tool_use_id": "toolu_0", "arguments": {"customer_id": customer}},
+        )
+        store.append_step(
+            type="tool_result",
+            tool_name="get_payment_history",
+            payload={"tool_use_id": "toolu_0", "is_error": False, "result": {"history": history}},
+        )
+
+    with session_scope() as session:
+        run = session.get(Run, run_id)
+        payload = letter_payload()
+        payload["customer_id"] = "cus_target"
+        proposal_id = make_proposal(session, run=run, payload=payload).id
+
+    assert api.get(f"/v1/proposals/{proposal_id}").json()["payment_history"] == wanted
+
+
+def test_scripted_tool_call_ids_are_unique_across_turns():
+    """The helper was minting `toolu_0` in every turn, which the real API never would."""
+    from app.agent.llm import turn
+
+    first = turn(tools=[("get_customer", {}), ("get_invoice", {})])
+    second = turn(tools=[("get_customer", {})])
+    ids = [c.id for c in first.tool_calls] + [c.id for c in second.tool_calls]
+    assert len(set(ids)) == len(ids), f"colliding scripted tool ids: {ids}"

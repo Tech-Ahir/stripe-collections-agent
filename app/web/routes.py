@@ -70,6 +70,9 @@ def dashboard(request: Request) -> HTMLResponse:
             request,
             runs=queries.list_runs(limit=15),
             max_proposals=settings().max_proposals_per_run,
+            # Section 9's fourth counter. None when Stripe could not be asked, which the
+            # template renders as a dash rather than a misleading zero.
+            overdue=queries.overdue_invoice_count(),
         ),
     )
 

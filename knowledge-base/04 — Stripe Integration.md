@@ -105,10 +105,15 @@ instead of a restricted one is visible rather than hidden — and the UI header 
 spread from 3 to 95 days, including one customer with no email and one invoice already paid.
 
 ```bash
-python scripts/seed_stripe_test_data.py --recreate   # delete ours, then create
-python scripts/seed_stripe_test_data.py --list       # what the agent will see
-python scripts/seed_stripe_test_data.py --destroy    # remove exactly our fixture
+docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate  # replace ours
+docker compose run --rm seed scripts/seed_stripe_test_data.py --list      # what the agent sees
+docker compose run --rm seed scripts/seed_stripe_test_data.py --destroy   # remove ours
 ```
+
+The `seed` service is a one-off container behind a compose profile, and the **only** place
+`STRIPE_API_KEY_SEED` appears. `app/guards.py` refuses to start the agent service if it can
+see that key: seeding needs write access, and "it is only used by a script" describes intent
+rather than capability.
 
 Every constraint below was discovered by trying, and each shapes the script:
 

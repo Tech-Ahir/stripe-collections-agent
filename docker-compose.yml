@@ -75,6 +75,26 @@ services:
       APPROVAL_SIGNING_SECRET: ${APPROVAL_SIGNING_SECRET:-test-secret-0000000000000000000000000000}
       GATEWAY_URL: http://gateway:9000
 
+  seed:
+    # A one-off container for the human-run seeding script, and the ONLY place
+    # STRIPE_API_KEY_SEED appears. Seeding needs write access to Stripe, which no running
+    # service has: app/guards.py refuses to start the agent service if it can see this key.
+    #
+    #   docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate
+    #   docker compose run --rm seed scripts/seed_stripe_test_data.py --list
+    #
+    # Behind a profile, so `docker compose up` never starts it. It reuses the tests image
+    # because that is the one image carrying app/, shared/ and scripts/ together.
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: docker/tests.Dockerfile
+    entrypoint: ["python"]
+    environment:
+      STRIPE_API_KEY_SEED: ${STRIPE_API_KEY_SEED:?set STRIPE_API_KEY_SEED in .env to seed}
+      STRIPE_API_KEY_READ: ${STRIPE_API_KEY_READ:-}
+      STRIPE_INCLUDE_TEST_CLOCK_INVOICES: ${STRIPE_INCLUDE_TEST_CLOCK_INVOICES:-true}
+
   mailpit:
     # Optional: a real SMTP send with a real inbox and no external delivery.
     #   docker compose --profile smtp up -d      then set EMAIL_ADAPTER=smtp

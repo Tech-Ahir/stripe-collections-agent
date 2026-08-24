@@ -15,8 +15,14 @@ from __future__ import annotations
 import os
 
 #: Environment variables that must never be visible to the agent service.
+#:
+#: ``STRIPE_API_KEY_SEED`` belongs here even though it only ever seeds test fixtures: it is a
+#: standard, write-capable Stripe key, and "it is only used by a script" is a fact about
+#: intent rather than about capability. It lives in exactly one place -- the `seed` compose
+#: service, a one-off container that serves no traffic.
 ACTION_CREDENTIAL_VARS = (
     "STRIPE_API_KEY_WRITE",
+    "STRIPE_API_KEY_SEED",
     "SMTP_PASSWORD",
     "RESEND_API_KEY",
 )

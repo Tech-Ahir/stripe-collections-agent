@@ -26,7 +26,7 @@ from app.approval.probe import mint_probe_token_for_demonstration
 from app.approval.token import mint_for_approval, new_nonce
 from app.config import AppSettings
 from app.gateway_client import GatewayClient, GatewayOutcome
-from app.store.repositories import expire_stale_proposals
+from app.store.repositories import expire_stale_proposals, settle_run_if_decided
 from shared import audit
 from shared.clock import now_utc
 from shared.db import session_scope
@@ -152,6 +152,8 @@ def reject(proposal_id: str, *, actor: str, note: str) -> Decision:
             subject_id=proposal.id,
             detail={"actor": actor, "note": note},
         )
+        # This may have been the last thing its run was waiting on.
+        settle_run_if_decided(session, proposal.run_id)
         return Decision(proposal_id=proposal.id, status="rejected", decision="reject")
 
 

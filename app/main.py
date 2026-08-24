@@ -37,6 +37,19 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     assert_no_action_credentials()
 
     init_schema_and_audit(service=SERVICE, version=VERSION)
+
+    # A run's status is in the database; the thread executing it was in the process that
+    # just died. Nothing is in flight yet, so anything still queued or running was
+    # abandoned -- say so instead of leaving it spinning on the dashboard forever.
+    from app.store.repositories import abandon_orphaned_runs, settle_decided_runs
+
+    abandoned = abandon_orphaned_runs()
+    settled = settle_decided_runs()
+    if abandoned:
+        log.warning("marked %d abandoned run(s) as failed: %s", len(abandoned), abandoned)
+    if settled:
+        log.info("settled %d run(s) whose proposals had all been decided", settled)
+
     log.info("agent service ready; gateway at %s", settings().gateway_url)
     try:
         yield

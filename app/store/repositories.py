@@ -120,14 +120,6 @@ class RunStore:
             )
             return next_seq
 
-    def tool_call_count(self) -> int:
-        with session_scope() as session:
-            return session.execute(
-                select(func.count())
-                .select_from(RunStep)
-                .where(RunStep.run_id == self.run_id, RunStep.type == "tool_call")
-            ).scalar_one()
-
     def proposal_count(self) -> int:
         with session_scope() as session:
             return session.execute(
@@ -202,6 +194,121 @@ class RunStore:
                 },
             )
             return proposal.id
+
+
+def settle_run_if_decided(session: Session, run_id: str) -> bool:
+    """Move a run out of `awaiting_approval` once nothing of its is still pending.
+
+    The loop's last act is to set `awaiting_approval`, and until this existed nothing ever
+    moved it again -- so a run whose every proposal had been approved and executed still
+    showed "awaiting approval" on the dashboard forever. The status was describing the
+    moment the agent stopped, not the state of the work.
+
+    `completed` is the right terminal state: the run did its job and the queue it produced
+    has been dealt with. It is deliberately not `executed` -- a run whose proposals were all
+    *rejected* is equally settled, and the run itself never executes anything.
+
+    Idempotent, and safe to call from a read path.
+    """
+    run = session.get(Run, run_id)
+    if run is None or run.status != "awaiting_approval":
+        return False
+
+    still_pending = session.execute(
+        select(func.count())
+        .select_from(Proposal)
+        .where(Proposal.run_id == run_id, Proposal.status == "pending")
+    ).scalar_one()
+    if still_pending:
+        return False
+
+    outcomes = dict(
+        session.execute(
+            select(Proposal.status, func.count())
+            .where(Proposal.run_id == run_id)
+            .group_by(Proposal.status)
+        ).all()
+    )
+    run.status = "completed"
+    run.ended_at = run.ended_at or now_utc()
+    audit.append(
+        session,
+        actor="system",
+        event=audit.RUN_SETTLED,
+        subject_type="run",
+        subject_id=run_id,
+        detail={"outcomes": outcomes, "reason": "every proposal from this run has been decided"},
+    )
+    log.info("run %s settled: %s", run_id, outcomes)
+    return True
+
+
+def settle_decided_runs(session: Session | None = None) -> int:
+    """Settle every run that is waiting on a queue with nothing left in it.
+
+    Called from the read paths as well as after each decision, so runs that went stale
+    before this existed heal the first time anyone looks at them.
+    """
+
+    def work(active: Session) -> int:
+        # A proposal past its TTL is decided, so expiry has to happen first or a run whose
+        # last pending letter merely lapsed would keep saying it was waiting on it.
+        expire_stale_proposals(active)
+        waiting = list(
+            active.execute(select(Run.id).where(Run.status == "awaiting_approval")).scalars()
+        )
+        return sum(1 for run_id in waiting if settle_run_if_decided(active, run_id))
+
+    if session is not None:
+        return work(session)
+    with session_scope() as owned:
+        return work(owned)
+
+
+def abandon_orphaned_runs(
+    session: Session | None = None, *, reason: str | None = None
+) -> list[str]:
+    """Fail any run whose worker no longer exists.
+
+    A run's status lives in the database; the thread executing it lives in a process. A
+    restart, a crash or a rebuild therefore leaves `queued` and `running` rows that nothing
+    will ever finish -- the dashboard showed one of each, stuck for hours.
+
+    Called at startup, where the reasoning is exact: this process has just begun, so it owns
+    no in-flight runs, so anything still marked queued or running was abandoned by whatever
+    process died. That reasoning holds only for a single-instance deployment, which is what
+    docker-compose.yml describes; running two app replicas against one database would need
+    a worker heartbeat instead.
+    """
+    message = reason or (
+        "The service restarted while this run was in progress, so no worker is executing "
+        "it any more. Start a new run."
+    )
+
+    def work(active: Session) -> list[str]:
+        orphaned = list(
+            active.execute(select(Run).where(Run.status.in_(("queued", "running")))).scalars()
+        )
+        for run in orphaned:
+            run.status = "failed"
+            run.error = message
+            run.ended_at = run.ended_at or now_utc()
+            audit.append(
+                active,
+                actor="system",
+                event=audit.RUN_ABANDONED,
+                subject_type="run",
+                subject_id=run.id,
+                detail={"previous_status": "queued/running", "reason": message},
+            )
+        if orphaned:
+            log.warning("marked %d abandoned run(s) as failed at startup", len(orphaned))
+        return [run.id for run in orphaned]
+
+    if session is not None:
+        return work(session)
+    with session_scope() as owned:
+        return work(owned)
 
 
 def expire_stale_proposals(session: Session | None = None) -> int:
