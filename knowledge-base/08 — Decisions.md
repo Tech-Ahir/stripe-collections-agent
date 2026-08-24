@@ -318,3 +318,53 @@ the tool calls instead, which would be invented narration presented as the model
 Asking for the summary gets the real thing.
 
 (`budget_tokens` is rejected outright by this model family; adaptive thinking replaces it.)
+
+---
+
+## 18. A run's status is corrected on read, not only on write
+
+**Context.** The loop set `awaiting_approval` and nothing moved it again, so runs whose
+proposals had all been executed still said they were waiting. Separately, a restart left runs
+stuck at `queued` and `running` forever. Both were visible on the dashboard at once.
+
+**Choice.** Settle on every decision *and* lazily on the read paths; reconcile orphans at
+startup.
+
+**Rejected.**
+
+- *Deriving the display status in the template.* The stored value would stay wrong, so
+  `/v1/runs` would keep reporting `awaiting_approval` to any other client. A read model that
+  disagrees with the row it reads from is a worse bug than the one being fixed.
+- *A background sweeper.* Another moving part, another thing to be down, and it would still
+  leave a window where the dashboard was wrong. Correcting on read has no window.
+- *A worker heartbeat table* for orphan detection. Right for two app replicas, and unnecessary
+  for one: at startup this process owns no in-flight runs, so the inference is already exact.
+  Noted in [[10 — Extending This]] as the thing to add if this ever runs more than once.
+
+**The general lesson**, and the reason this is written down: a status that is only ever written
+forwards, by a process that may not survive, will be wrong the first time anything unusual
+happens. Any new status field in this system should be able to answer "who corrects this if the
+process dies mid-way?"
+
+---
+
+## 19. "Today" on the dashboard is the UTC day, and "sent" counts executions
+
+**Context.** Section 9 asks for "approved today, sent today". The first version shipped
+all-time totals — and an all-time "3 sent" says nothing about today, which is what the counter
+claimed to say.
+
+**Choice.** Count against midnight UTC. Count *succeeded executions* for "sent".
+
+**Rejected.**
+
+- *A local-time day boundary.* There is one operator identity with no timezone of its own, and
+  the audit log is UTC throughout. A local boundary would make the counters disagree with the
+  log, which is the one record that is supposed to settle arguments.
+- *Counting outbox rows for "sent".* The outbox is one of three adapters. With
+  `EMAIL_ADAPTER=smtp` or `resend` there is no outbox row at all, so the counter would have
+  read zero while letters were going out — a counter that is wrong in exactly the configuration
+  where it matters most.
+
+The overdue counter needs a Stripe call on a page load, so it is cached for a minute and
+degrades to a dash rather than failing the page. A counter must never be why a screen 500s.

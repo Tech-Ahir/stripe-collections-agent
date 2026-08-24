@@ -162,9 +162,16 @@ because Postgres serialises better, and `run_in_transaction` can shrink.
 about. `shared/schema.py` should then become a *check* rather than a repair: compare and refuse,
 so a mismatch is a deployment error instead of a silent `ADD COLUMN`.
 
-**Many concurrent runs.** The thread pool in `app/runner.py` is capped at two and the SSE stream
-polls per client. Both are fine for one operator and both are the first things to replace: a real
-queue for runs, and a shared change-feed for the stream.
+**Many concurrent runs, or more than one app instance.** The thread pool in `app/runner.py` is
+capped at two and the SSE stream polls per client. Both are fine for one operator and both are
+the first things to replace: a real queue for runs, and a shared change-feed for the stream.
+
+There is one correctness item hiding in that change. `abandon_orphaned_runs()` fails any run
+still marked `queued` or `running` at startup, and the inference is only exact because a single
+instance owns every in-flight run. **A second replica would kill the first's live runs.** Before
+running two, give each run a worker id and a heartbeat, and abandon only runs whose heartbeat has
+gone stale. A test asserting that a *live* run survives a second instance starting is the one to
+write first.
 
 **Retries on a failed execution.** Today a failed execution is terminal and recorded. Automatic
 retry is a genuine feature request and the safe version is narrow: retry the *same* execution row

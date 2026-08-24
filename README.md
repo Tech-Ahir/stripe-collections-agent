@@ -188,6 +188,9 @@ notice.
 | `MAX_PROPOSALS_PER_RUN` | `10` | |
 | `STRIPE_INCLUDE_TEST_CLOCK_INVOICES` | `true` | Makes the test-mode fixture visible to the agent. See below. |
 | `ENABLE_UNAPPROVED_ATTEMPT_DEMO` | `true` | The "try to send without approval" button. |
+| `RUN_TIMEOUT_SECONDS` | `600` | Ceiling on a single model request, so a wedged call fails the run instead of holding a worker. |
+| `MAX_CONCURRENT_RUNS` | `2` | |
+| `APPROVAL_TOKEN_TTL_SECONDS` | `900` | Section 5's fifteen minutes. |
 
 Compose refuses to start if either required value is missing, rather than booting into a state
 where tokens cannot be verified.

@@ -99,6 +99,42 @@ To correct a mistake, **append a correcting event**. If you find yourself wantin
 it: the "try to send without approval" demonstration may attempt any other status, and never
 that one.
 
+## Run lifecycle
+
+```
+  operator starts            agent works              queue is dealt with
+       │                          │                          │
+   [queued] ──picked up──▶ [running] ──proposed──▶ [awaiting_approval]
+       │                          │                          │
+       │                          │                          └──all decided──▶ [completed]
+       │                          └──proposed nothing──▶ [completed]
+       │
+       └──error, cap, timeout, or the process died──▶ [failed]
+
+  Terminal states: completed, failed.
+```
+
+Two transitions are worth knowing because their absence was a bug.
+
+**`awaiting_approval` → `completed`.** Nothing used to make this move. The loop set
+`awaiting_approval` as its last act, and a run whose every proposal had been approved and
+executed still reported that it was waiting — the status described the moment the agent
+stopped, not the state of the work. `settle_run_if_decided()` moves it once nothing of that
+run's is pending, and is called after each decision *and* on the read paths, so rows that went
+stale before it existed heal the first time anyone looks. Any mix of terminal outcomes counts:
+a run whose proposals were all *rejected* is as settled as one all executed.
+
+**`queued` / `running` → `failed`.** A run's status is a row; the thread advancing it is in a
+process. A restart left rows nothing would ever finish. `abandon_orphaned_runs()` fails them at
+startup, where the reasoning is exact: this process has just begun, so it owns no in-flight
+runs, so anything still queued or running was abandoned. That holds for a single-instance
+deployment, which is what `docker-compose.yml` describes; two app replicas against one database
+would need a worker heartbeat instead. Whatever the run managed to produce — its partial
+transcript, any proposals — survives; only the status is corrected.
+
+Both write to the audit log (`run.settled`, `run.abandoned`), because a status changing without
+a human asking for it should be visible.
+
 ## Schema management
 
 `shared/schema.py` creates missing tables, adds missing **columns** with a type-appropriate

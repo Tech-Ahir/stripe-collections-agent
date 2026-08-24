@@ -180,3 +180,43 @@ def test_claude_md_carries_the_seven_rules():
         "append-only",
     ]:
         assert fragment in rules, f"CLAUDE.md should state: {fragment}"
+
+
+# ----------------------------------------------------------------------------------
+# Configuration that is settable must be documented
+# ----------------------------------------------------------------------------------
+
+#: Set by docker-compose.yml rather than by an operator, so .env.example does not list them.
+COMPOSE_OWNED_SETTINGS = {"database_url", "gateway_url", "outbox_dir"}
+
+
+def test_env_example_documents_every_operator_facing_setting():
+    """A setting nobody documents is a setting nobody knows they have.
+
+    Two were found doing nothing at all -- RUN_TIMEOUT_SECONDS was declared and read by
+    nothing, and a wedged model call could hold a worker indefinitely as a result. Requiring
+    every setting to appear here means the next such gap is visible.
+    """
+    from app.config import AppSettings
+    from gateway.config import GatewaySettings
+
+    documented = (REPO_ROOT / ".env.example").read_text(encoding="utf-8").upper()
+    declared = set(AppSettings.model_fields) | set(GatewaySettings.model_fields)
+    missing = sorted(
+        name for name in declared - COMPOSE_OWNED_SETTINGS if name.upper() not in documented
+    )
+    assert missing == [], f"settings absent from .env.example: {missing}"
+
+
+def test_the_readme_config_table_covers_the_settings_an_operator_changes():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    for name in (
+        "STRIPE_API_KEY_READ",
+        "APPROVAL_SIGNING_SECRET",
+        "ANTHROPIC_API_KEY",
+        "EMAIL_ADAPTER",
+        "PROPOSAL_TTL_HOURS",
+        "RUN_TIMEOUT_SECONDS",
+        "ENABLE_UNAPPROVED_ATTEMPT_DEMO",
+    ):
+        assert name in readme, f"the README should document {name}"
