@@ -115,3 +115,30 @@ def gw_session(gateway_env) -> Iterator:
 
     with session_scope() as session:
         yield session
+
+
+def minimal_subprocess_env(**extra: str) -> dict[str, str]:
+    """A trimmed environment that still works.
+
+    The import-boundary probes run a fresh interpreter to see what actually gets loaded, so
+    the environment is trimmed to keep the parent's credentials out of it. It cannot be
+    trimmed to nothing: on Windows an empty PATH breaks asyncio's socket initialisation
+    with WinError 10106, and every SQLAlchemy import pulls asyncio in.
+    """
+    import os
+
+    keep = (
+        "PATH",
+        "SYSTEMROOT",
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "PATHEXT",
+        "PYTHONHOME",
+    )
+    env = {name: value for name, value in os.environ.items() if name in keep}
+    env["PYTHONPATH"] = str(REPO_ROOT)
+    env.update(extra)
+    return env

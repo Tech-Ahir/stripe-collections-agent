@@ -128,12 +128,9 @@ def _line(stdout: str, prefix: str) -> str:
 
 
 def _clean_env() -> dict[str, str]:
-    import os
+    from tests.conftest import minimal_subprocess_env
 
-    keep = ("PATH", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP", "PYTHONHOME", "PYTHONPATH")
-    env = {k: v for k, v in os.environ.items() if k in keep}
-    env["PYTHONPATH"] = str(REPO_ROOT)
-    return env
+    return minimal_subprocess_env()
 
 
 # ----------------------------------------------------------------------------------
