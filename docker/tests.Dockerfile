@@ -33,6 +33,11 @@ COPY app/ ./app/
 COPY gateway/ ./gateway/
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
+# Documentation deliverables. tests/test_documentation.py asserts the vault's links resolve
+# (acceptance criterion 10) and that the README does not promise a script that is absent.
+COPY README.md CLAUDE.md ./
+COPY docs/ ./docs/
+COPY knowledge-base/ ./knowledge-base/
 
 RUN mkdir -p /data
 

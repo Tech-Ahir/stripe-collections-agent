@@ -40,6 +40,10 @@ filterwarnings = ["error::DeprecationWarning:app.*", "error::DeprecationWarning:
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Ruff formats fenced code blocks inside markdown, which would rewrite the illustrative
+# snippets in the boundary guide and the vault -- aligned comments and all. Documentation is
+# not source; exclude it and let the prose stay as written.
+extend-exclude = ["knowledge-base", "docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

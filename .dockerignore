@@ -15,10 +15,10 @@ data/
 *.db
 *.db-wal
 *.db-shm
-knowledge-base/
-docs/
-README.md
-CLAUDE.md
+# The docs and the vault are deliverables that tests/test_documentation.py asserts on, so
+# they must be in the build context. Only docker/tests.Dockerfile copies them; the two
+# service images copy their own source and nothing else.
 *.md
-!requirements*.txt
+!README.md
+!CLAUDE.md
 .github/

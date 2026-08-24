@@ -60,6 +60,33 @@ def tone_for(days_overdue: int) -> str:
     return "final"
 
 
+def pick_across_the_tone_ladder(rows: list[dict], *, limit: int = 3) -> list[dict]:
+    """Choose invoices that span the tone ladder, largest first within each band.
+
+    Selecting purely by amount is the obvious thing and it produced two `final` letters and
+    one `firm` -- while section 11 step 3 of the brief is "three letters, three tones, three
+    rationales". The tone ladder is the thing being demonstrated, so the fixture picks one
+    invoice from each band before it takes a second from any.
+    """
+    by_amount = sorted(rows, key=lambda row: row["amount_due"], reverse=True)
+    chosen: list[dict] = []
+    for wanted in ("friendly", "firm", "final"):
+        for row in by_amount:
+            if row in chosen:
+                continue
+            if tone_for(row["days_overdue"] or 0) == wanted:
+                chosen.append(row)
+                break
+    # Top up from whatever is left if a band was empty, so a thin fixture still demos.
+    for row in by_amount:
+        if len(chosen) >= limit:
+            break
+        if row not in chosen:
+            chosen.append(row)
+    chosen.sort(key=lambda row: row["amount_due"], reverse=True)
+    return chosen[:limit]
+
+
 def compose(facts: dict, tone: str) -> tuple[str, str]:
     """A letter containing every fact section 8 requires, and no figure we did not retrieve."""
     subject = (
@@ -134,8 +161,9 @@ def main() -> int:
         "list_overdue_invoices",
         {"min_days_overdue": 1, "limit": 25, "min_amount_cents": None},
     )
-    candidates = [row for row in listing.get("invoices", []) if row["deliverable"]][:3]
+    deliverable = [row for row in listing.get("invoices", []) if row["deliverable"]]
     skipped = [row for row in listing.get("invoices", []) if not row["deliverable"]]
+    candidates = pick_across_the_tone_ladder(deliverable, limit=3)
 
     if not candidates:
         print(f"{YELLOW}No deliverable overdue invoices found.{RESET}")
