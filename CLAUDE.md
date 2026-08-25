@@ -58,7 +58,7 @@ currency arithmetic and never sees a bare integer it is expected to divide.
 
 | Variable | Lives in | Notes |
 |---|---|---|
-| `STRIPE_API_KEY_READ` | app only | Restricted key. Read-only on Invoices, Customers, Charges. |
+| `STRIPE_API_KEY_READ` | app only | Restricted key. Read-only on Invoices, Customers and Test clocks. |
 | `STRIPE_API_KEY_WRITE` | gateway only | Never present in the app's environment. |
 | `STRIPE_API_KEY_SEED` | seed script only | Run by a human, never by a service. |
 | `ANTHROPIC_API_KEY` | app only | |

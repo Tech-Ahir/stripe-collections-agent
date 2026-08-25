@@ -9,61 +9,66 @@ letters locally, so cloning this repository and running the demo cannot email a 
 
 ---
 
-## Ten minutes to a working demo
+## What you need first
 
-You need Docker. Nothing else — no Python, no Node, no database.
+Three things. All free, all install in a few minutes.
 
-### 1. Configure (2 min)
+| | What | Where | Why |
+|---|---|---|---|
+| 1 | **Docker Desktop** | <https://www.docker.com/products/docker-desktop/> | Runs the whole system. Nothing else is needed — no Python, no Node, no database. |
+| 2 | **Git** | Already on most Macs. If not, open Terminal and run `xcode-select --install` | Downloads the project. |
+| 3 | **Obsidian** | <https://obsidian.md/download> | Reads the knowledge base. Free — no account, no signup, no paid tier needed. |
+
+Install Docker Desktop, then **open it** and wait for the whale icon in your menu bar to stop
+animating. The rest will not work until it is running.
+
+---
+
+## Install it — two commands
+
+### Step 1 · Download the project
+
+Open Terminal, then paste this and press Enter:
 
 ```bash
-cp .env.example .env
+curl -fsSL https://raw.githubusercontent.com/Tech-Ahir/stripe-collections-agent/main/scripts/get-repo.sh | bash
 ```
 
-Fill in three values:
+It puts the project in `~/stripe-collections-agent` and tells you so when it finishes.
 
-| Variable | Where to get it |
+> **If it says it cannot download:** the repository is private, so GitHub needs to know who you
+> are. Install the GitHub CLI with `brew install gh`, run `gh auth login`, then run the command
+> again. If that still fails, ask for your repository invitation to be re-sent.
+
+### Step 2 · Build and start it
+
+```bash
+cd ~/stripe-collections-agent
+./scripts/setup-demo.sh
+```
+
+The script asks you for three things and does everything else itself:
+
+| It asks for | Where to get it |
 |---|---|
-| `APPROVAL_SIGNING_SECRET` | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `STRIPE_API_KEY_READ` | Stripe Dashboard → Developers → API keys → **Restricted keys**. Read-only on Invoices, Customers, Charges. A standard `sk_test_…` works, but the read-only split is the point. |
-| `STRIPE_API_KEY_SEED` | Your standard `sk_test_…` key. Used only by the seeding script; no service ever reads it. |
+| **Your Anthropic API key** | <https://console.anthropic.com> → API keys. This one is yours and bills to you. |
+| **The Stripe read key** | In the message that invited you to this repository. Starts with `rk_test_` |
+| **The Stripe seed key** | Same message. Starts with `sk_test_` |
 
-`ANTHROPIC_API_KEY` is needed only to run the agent live. Everything else in this README works
-without it.
+Then it builds the images, starts both services, checks the boundary holds, and loads the demo
+data. First run takes about five minutes, mostly the build.
 
-### 2. Bring it up (2 min)
+When it finishes, open <http://localhost:8000> and press **Start agent run**.
 
-```bash
-docker compose up -d --build --wait
-```
+> **About the Stripe keys.** They belong to a sandbox created solely for this evaluation. They
+> are test-mode keys: they cannot touch real customers, real cards or real money, and there is no
+> live-key code path anywhere in this system. They are sent with your invitation rather than
+> committed to the repository, because a key in git history stays there even after it is rotated.
 
-Two containers start. `app` publishes port 8000; `gateway` publishes nothing.
+### No Anthropic key yet?
 
-### 3. Seed Stripe test mode (1 min)
-
-Six customers and eight invoices, overdue from 3 to 95 days, including one customer with no email
-address and one invoice already paid — so the agent's filtering is visible rather than assumed.
-
-```bash
-docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate
-```
-
-```
-  invoice      $250.00  acme         3 days overdue
-  invoice    $1,240.50  borealis     9 days overdue
-  invoice    $4,800.00  corvus      18 days overdue
-  invoice    $3,300.00  delta       27 days overdue   <- no email on file, must be skipped
-  invoice      $875.00  eastwind    47 days overdue
-  invoice   $23,400.00  ferrolux    62 days overdue
-  invoice    $8,650.00  ferrolux    95 days overdue
-```
-
-### 4. Fill the queue (1 min)
-
-**With an Anthropic key** — open <http://localhost:8000> and press **Start agent run**. Watch the
-transcript stream: the agent chooses its own tools and its own order.
-
-**Without one** — populate the queue by driving the real loop with a scripted model over the same
-live Stripe data:
+Press Enter to skip it. Everything except the agent's thinking still works. Fill the queue with a
+scripted model driving the real loop over the same live Stripe data:
 
 ```bash
 docker compose exec app python scripts/dev_seed_run.py
@@ -72,7 +77,38 @@ docker compose exec app python scripts/dev_seed_run.py
 That run is badged **scripted fixture** in the UI and says so in its own transcript. It exists so
 the approval flow is reviewable before a key is available, not to pass for a real agent run.
 
-### 5. Run the demo (4 min)
+---
+
+## Open the knowledge base in Obsidian
+
+The `knowledge-base/` folder is an Obsidian vault: eleven linked notes covering the architecture,
+the approval boundary, the agent design and how to extend it. It is the written half of the
+deliverable.
+
+Obsidian does not need an account. Download it, then:
+
+1. **Open Obsidian.** On first launch you get a window titled *Vaults*. If Obsidian is already
+   open, click the vault name in the bottom-left corner, then **Manage vaults…**
+2. Click **Open folder as vault.**
+3. Navigate to the project folder, then into `knowledge-base`, and click **Open.**
+   The full path is:
+   ```
+   ~/stripe-collections-agent/knowledge-base
+   ```
+   In the file picker press `Cmd` + `Shift` + `G` and paste that path to jump straight there.
+4. Obsidian asks whether you trust the author, because the vault carries its own appearance
+   settings. Click **Trust author and enable plugins.** Nothing here runs code — it is Markdown
+   and a theme preference.
+5. Open **`00 — Start Here`** in the left sidebar. Every other note is linked from it.
+
+> Select the `knowledge-base` folder itself, not the project folder above it. Pointing Obsidian
+> at the whole project works, but it will show you the source code alongside the notes.
+
+To see how the notes connect, open the graph view: `Cmd` + `G` on a Mac.
+
+---
+
+## Run the demo
 
 Open <http://localhost:8000/proposals>. Then, in order:
 
@@ -106,6 +142,27 @@ docker compose exec app python scripts/demo_boundary.py
 
 ---
 
+## Reseeding the Stripe data
+
+The demo data lives in the Stripe sandbox, not on your machine. `scripts/setup-demo.sh` loads it
+for you. To reload it later:
+
+```bash
+docker compose run --rm seed scripts/seed_stripe_test_data.py --recreate
+```
+
+```
+  invoice      $250.00  acme         3 days overdue
+  invoice    $1,240.50  borealis     9 days overdue
+  invoice    $4,800.00  corvus      18 days overdue
+  invoice    $3,300.00  delta       27 days overdue   <- no email on file, must be skipped
+  invoice      $875.00  eastwind    47 days overdue
+  invoice   $23,400.00  ferrolux    62 days overdue
+  invoice    $8,650.00  ferrolux    95 days overdue
+```
+
+---
+
 ## The shape of it
 
 ```
@@ -120,8 +177,9 @@ it holds no capability to act. The gateway can act, and cannot be persuaded — 
 against a signed approval it verifies with **seven checks, in order**, the fourth of which reads
 the proposal's status from its own database rather than from anything the caller sent.
 
-`docs/boundary-guide.md` explains it properly. `knowledge-base/` is an Obsidian vault covering
-architecture, decisions, standards and how to extend it.
+`docs/boundary-guide.md` explains it properly. `docs/build-brief.md` is the specification this
+was built to. `knowledge-base/` is an Obsidian vault covering architecture, decisions, standards
+and how to extend it.
 
 ---
 
@@ -260,6 +318,7 @@ here. Production hardening: rate limiting, secrets management beyond environment
 
 ```
 CLAUDE.md                  the seven non-negotiable rules, for contributors and AI assistants
+.env.demo                  demo settings; setup-demo.sh fills in the three you supply
 docker-compose.yml         gateway has NO published port
 app/                       AGENT SERVICE — no write credentials
   agent/                   loop, prompts, tools (READ and DRAFT only), guardrails
@@ -275,8 +334,10 @@ gateway/                   ACTION GATEWAY — isolated, no published port
   email_adapter/           outbox (default), smtp, resend
   stripe_client/write.py   write-capable key
 shared/                    schemas, hashing, audit chain, money, the data model
-scripts/                   seeding, the boundary demo, the tool-schema inspector
+scripts/                   install, seeding, the boundary demo, the tool-schema inspector
+  get-repo.sh              step 1 — download the project
+  setup-demo.sh            step 2 — build, start, verify, seed
 tests/                     refusals, boundary, guardrails, money, audit chain, API
-docs/                      the boundary guide and the generated OpenAPI
+docs/                      the build brief, the boundary guide, the generated OpenAPI
 knowledge-base/            Obsidian vault, notes 00–10
 ```

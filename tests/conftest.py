@@ -15,6 +15,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# /healthz probes Stripe for real in a running service. The suite must not reach the
+# network, so the probe is off here and its two branches are asserted directly instead.
+os.environ.setdefault("HEALTH_PROBE_STRIPE", "false")
+
 
 @pytest.fixture()
 def db_path(tmp_path: Path) -> Iterator[Path]:

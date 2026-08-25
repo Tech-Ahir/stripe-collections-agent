@@ -2,6 +2,11 @@
 .env
 .env.*
 !.env.example
+# .env.demo is the one deliberate exception, and it holds NO credentials. It carries the
+# demo's settings with the three secret values left blank; scripts/setup-demo.sh fills
+# them in locally. The Stripe sandbox keys travel with the repository invitation instead,
+# because a key committed to git stays in the history even after it is rotated.
+!.env.demo
 
 # Local data volume / SQLite / captured outbox
 /data/

@@ -8,6 +8,7 @@ there is to create a proposal that a human may later approve, which the gateway 
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -100,6 +101,71 @@ async def _probe_gateway() -> dict[str, Any]:
         return {"status": "unreachable", "error": type(exc).__name__, "detail": str(exc)[:200]}
 
 
+#: Stripe is probed at most this often. The dashboard polls, and a health endpoint that
+#: bills an API call per poll is its own defect.
+STRIPE_PROBE_TTL_SECONDS = 30.0
+_stripe_probe_cache: dict[str, Any] = {"at": 0.0, "result": None}
+
+
+def _stripe_key_facts(key: str) -> dict[str, Any]:
+    """What can be told from the key string alone, without calling anything.
+
+    ``mode`` accepts BOTH test prefixes. A restricted test key is ``rk_test_...``, so
+    matching only ``sk_test`` reported "unknown" precisely when the agent was configured
+    the way the brief's rule 2 requires.
+    """
+    return {
+        "mode": "test" if key.startswith(("sk_test", "rk_test")) else "unknown",
+        "key_kind": "restricted" if key.startswith("rk_") else ("standard" if key else "absent"),
+    }
+
+
+async def _probe_stripe() -> dict[str, Any]:
+    """Reachability, by actually asking Stripe.
+
+    A truthiness test on the environment variable cannot tell a working key from a typo,
+    and reporting the typo as ``ok`` puts a green light on the one screen built to warn
+    the operator. One `GET /v1/invoices?limit=1` settles it: 200 means the key
+    authenticates AND carries Invoices read, which is the minimum the agent needs.
+    """
+    config = settings()
+    key = config.stripe_api_key_read
+    facts = _stripe_key_facts(key)
+
+    if not key:
+        return {"status": "not_configured", **facts}
+
+    if not config.health_probe_stripe:
+        # No call was made, so no claim is made about reachability.
+        return {"status": "ok", "reachability": "not_probed", **facts}
+
+    now = time.monotonic()
+    cached = _stripe_probe_cache["result"]
+    if cached is not None and now - float(_stripe_probe_cache["at"]) < STRIPE_PROBE_TTL_SECONDS:
+        return {**cached, **facts}
+
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            response = await client.get(
+                "https://api.stripe.com/v1/invoices",
+                params={"limit": 1},
+                auth=(key, ""),
+            )
+        if response.status_code == 200:
+            result: dict[str, Any] = {"status": "ok"}
+        elif response.status_code in (401, 403):
+            # 401: the key is not valid. 403: valid, but missing Invoices read. Both mean
+            # the agent cannot do its job, and both should be visible before a run starts.
+            result = {"status": "unauthorized", "http_status": response.status_code}
+        else:
+            result = {"status": "degraded", "http_status": response.status_code}
+    except Exception as exc:  # noqa: BLE001 - health probes report, never raise
+        result = {"status": "unreachable", "error": type(exc).__name__}
+
+    _stripe_probe_cache.update({"at": now, "result": result})
+    return {**result, **facts}
+
+
 @app.get("/healthz", tags=["ops"], summary="Liveness plus dependency reachability")
 async def healthz() -> dict[str, Any]:
     """Liveness, plus the reachability of Stripe, Anthropic and the gateway.
@@ -110,13 +176,7 @@ async def healthz() -> dict[str, Any]:
     config = settings()
     checks: dict[str, Any] = {
         "database": {"status": "ok"},
-        "stripe": {
-            "status": "ok" if config.stripe_api_key_read else "not_configured",
-            "mode": "test" if config.stripe_api_key_read.startswith("sk_test") else "unknown",
-            "key_kind": "restricted"
-            if config.stripe_api_key_read.startswith("rk_")
-            else ("standard" if config.stripe_api_key_read else "absent"),
-        },
+        "stripe": await _probe_stripe(),
         "anthropic": {
             "status": "ok" if config.anthropic_api_key else "not_configured",
             "model": config.anthropic_model,
