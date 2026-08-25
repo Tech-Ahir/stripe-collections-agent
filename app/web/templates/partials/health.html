@@ -14,7 +14,7 @@
       {% else %}border-[#efcdc4] bg-[color:var(--stop-bg)] text-[color:var(--stop)]{% endif %}"
  title="{{ check | tojson }}">
       <span class="h-1.5 w-1.5 rounded-full
-        {% if state == 'ok' %}bg-[color:var(--good)]{% elif state == 'not_configured' %}bg-[color:var(--muted)]{% else %}bg-[color:var(--stop-bg)]0{% endif %}"></span>
+        {% if state == 'ok' %}bg-[color:var(--good)]{% elif state == 'not_configured' %}bg-[color:var(--muted)]{% else %}bg-[color:var(--stop)]{% endif %}"></span>
       {{ DEPENDENCY_NAMES.get(name, name) }}{% if state != 'ok' %} · {{ state }}{% endif %}
     </span>
   {% endfor %}

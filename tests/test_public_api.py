@@ -14,6 +14,7 @@ two are wired together for real by scripts/demo_boundary.py.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -173,6 +174,76 @@ def test_healthz_reports_each_dependency_separately(api):
     body = api.get("/healthz").json()
     assert set(body["checks"]) == {"database", "stripe", "anthropic", "gateway"}
     assert body["checks"]["anthropic"]["status"] == "not_configured"
+
+
+# ----------------------------------------------------------------------------------
+# /healthz is the only screen that warns an operator before a run. Two things it got
+# wrong are pinned here so they cannot regress.
+# ----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("key", "expected_mode", "expected_kind"),
+    [
+        ("rk_test_abc", "test", "restricted"),
+        ("sk_test_abc", "test", "standard"),
+        ("", "unknown", "absent"),
+    ],
+)
+def test_a_restricted_test_key_is_still_recognised_as_test_mode(key, expected_mode, expected_kind):
+    """Rule 2 requires an rk_test_ key. Reporting that as mode 'unknown' punished it."""
+    from app.main import _stripe_key_facts
+
+    facts = _stripe_key_facts(key)
+    assert facts["mode"] == expected_mode
+    assert facts["key_kind"] == expected_kind
+
+
+def test_healthz_does_not_claim_stripe_is_reachable_without_asking(monkeypatch):
+    """With the probe off, the payload says so rather than implying a live check."""
+    from app import main as main_module
+
+    config = main_module.settings()
+    monkeypatch.setattr(config, "stripe_api_key_read", "rk_test_abc", raising=False)
+    monkeypatch.setattr(config, "health_probe_stripe", False, raising=False)
+
+    result = asyncio.run(main_module._probe_stripe())
+
+    assert result["status"] == "ok"
+    assert result["reachability"] == "not_probed"
+
+
+def test_a_stripe_key_that_cannot_authenticate_is_not_reported_as_ok(monkeypatch):
+    """The defect this replaces: any non-empty string produced {"status": "ok"}."""
+    import httpx
+
+    from app import main as main_module
+
+    main_module._stripe_probe_cache.update({"at": 0.0, "result": None})
+
+    class _Unauthorized:
+        status_code = 401
+
+    class _Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return False
+
+        async def get(self, *_, **__):
+            return _Unauthorized()
+
+    config = main_module.settings()
+    monkeypatch.setattr(config, "stripe_api_key_read", "rk_test_abc", raising=False)
+    monkeypatch.setattr(config, "health_probe_stripe", True, raising=False)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_: _Client())
+
+    result = asyncio.run(main_module._probe_stripe())
+    main_module._stripe_probe_cache.update({"at": 0.0, "result": None})
+
+    assert result["status"] == "unauthorized"
+    assert result["http_status"] == 401
 
 
 def test_a_missing_proposal_returns_the_section_6_error_envelope(api):

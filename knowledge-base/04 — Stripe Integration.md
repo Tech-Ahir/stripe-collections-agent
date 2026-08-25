@@ -92,7 +92,7 @@ is the failure check 6 exists to prevent.
 
 | Variable | Scope |
 |---|---|
-| `STRIPE_API_KEY_READ` | Agent service. **Restricted** key, read-only on Invoices, Customers, Charges. |
+| `STRIPE_API_KEY_READ` | Agent service. **Restricted** key, read-only on Invoices, Customers and Test clocks. Test clocks is required: without it, invoices more than ~30 days overdue are silently absent from the queue. |
 | `STRIPE_API_KEY_WRITE` | Gateway only. Needed solely if `ENABLE_STRIPE_INVOICE_SEND` is on. |
 | `STRIPE_API_KEY_SEED` | The seed script only. Run by a human, never by a service. |
 

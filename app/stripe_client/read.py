@@ -108,7 +108,7 @@ def days_overdue(due_date_epoch: int | None, *, now: datetime | None = None) -> 
 
 
 def _days(count: int | None) -> str:
-    """"1 day", not "1 days". This string is read by the operator and by the agent."""
+    """Render a day count as the operator reads it: "1 day", never "1 days"."""
     return f"{count} day" if count == 1 else f"{count} days"
 
 
@@ -418,9 +418,17 @@ class StripeReadClient:
                 ),
             )
         except StripeReadError:
-            # A restricted key without test-clock read access is the expected case in a
-            # tightened deployment. That is not an error worth failing a run over.
-            log.info("test clocks are not readable with this key; skipping fixture scan")
+            # A restricted key without test-clock read access is survivable -- it is not
+            # worth failing a run over -- but it is NOT invisible. Stripe refuses a
+            # back-dated due_date, so every invoice more than ~30 days overdue exists only
+            # on a test clock. Losing this scan silently drops the oldest and largest
+            # receivables from the queue, which is exactly the data a reviewer came to see.
+            log.warning(
+                "STRIPE_API_KEY_READ cannot read test clocks, so invoices more than ~30 "
+                "days overdue will be MISSING from this run. Grant the restricted key "
+                "read access to Test clocks, or set "
+                "STRIPE_INCLUDE_TEST_CLOCK_INVOICES=false to stop attempting the scan."
+            )
             return collected
 
         scoped = {key: value for key, value in overdue_filter.items() if key != "limit"}

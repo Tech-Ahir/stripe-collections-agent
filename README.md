@@ -24,7 +24,7 @@ Fill in three values:
 | Variable | Where to get it |
 |---|---|
 | `APPROVAL_SIGNING_SECRET` | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `STRIPE_API_KEY_READ` | Stripe Dashboard → Developers → API keys → **Restricted keys**. Read-only on Invoices, Customers, Charges. A standard `sk_test_…` works, but the read-only split is the point. |
+| `STRIPE_API_KEY_READ` | Stripe Dashboard → Developers → API keys → **Restricted keys**. Read-only on **Invoices**, **Customers** and **Test clocks** — all three. Without Test clocks, invoices more than ~30 days overdue are missing from the queue. A standard `sk_test_…` works, but the read-only split is the point. |
 | `STRIPE_API_KEY_SEED` | Your standard `sk_test_…` key. Used only by the seeding script; no service ever reads it. |
 
 `ANTHROPIC_API_KEY` is needed only to run the agent live. Everything else in this README works

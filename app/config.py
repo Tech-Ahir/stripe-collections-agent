@@ -13,7 +13,7 @@ from shared.config import CommonSettings
 
 
 class AppSettings(CommonSettings):
-    #: Restricted key. Read-only on Invoices, Customers, Charges.
+    #: Restricted key. Read-only on Invoices, Customers and Test clocks.
     stripe_api_key_read: str = ""
 
     anthropic_api_key: str = ""
@@ -42,6 +42,12 @@ class AppSettings(CommonSettings):
     #: How many agent runs may execute at once. Two is plenty for one operator, and it
     #: keeps SQLite write contention where the retry logic can absorb it.
     max_concurrent_runs: int = 2
+
+    #: /healthz makes one cheap, real Stripe call so a key that cannot authenticate
+    #: shows red instead of green. Section 6 promises *reachability*, and a presence check
+    #: on an environment variable cannot deliver that. The result is cached briefly, and
+    #: the test suite turns it off because tests must not reach the network.
+    health_probe_stripe: bool = True
 
     #: Section 9 requires a "Try to send without approval" button, which is step 4 of the
     #: handoff demo. It mints a correctly signed token for a PENDING proposal so the gateway
