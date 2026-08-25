@@ -284,6 +284,15 @@ def test_a_still_unpaid_prior_invoice_says_how_overdue_it_is():
     assert entry["outcome"] == "still unpaid, 30 days overdue"
 
 
+def test_a_single_day_reads_as_one_day(monkeypatch):
+    """The operator reads this string, and so does the agent. "1 days overdue" is neither."""
+    from app.stripe_client.read import _days
+
+    assert _days(1) == "1 day"
+    assert _days(2) == "2 days"
+    assert _days(0) == "0 days"
+
+
 def test_a_voided_invoice_reports_its_status_rather_than_guessing():
     entry = project_payment_history_entry(
         {"id": "in_v", "status": "void", "currency": "usd", "amount_due": 0, "amount_paid": 0},

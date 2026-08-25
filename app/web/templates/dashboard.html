@@ -2,98 +2,131 @@
 {% block title %}Dashboard · Collections Agent{% endblock %}
 {% block content %}
 
-<div class="grid gap-6 lg:grid-cols-3">
+{# The day's line. Section 9's four counters, set as one ruled band across the top rather
+ than four floating cards: they are read together, in one glance, the way a clerk reads
+ the top of a page. The figure leads, the label names it, the line underneath is the one
+ an operator would otherwise have to ask about. #}
+<div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+  <h1 class="text-sm font-semibold">Today &middot; {{ today.strftime('%d %B %Y') }}</h1>
+  <span class="text-xs text-[color:var(--muted)]">Counted from midnight UTC</span>
+</div>
 
-  {# --- Start a run ------------------------------------------------------------- #}
-  <section class="self-start rounded-lg border rule bg-white p-5 lg:col-span-1">
-    <h2 class="text-sm font-semibold">Start an agent run</h2>
-    <p class="mt-1 text-xs leading-relaxed text-slate-500">
-      The agent chooses which tools to call and in what order. It drafts letters into the
-      queue and can send nothing.
-    </p>
-    <form method="post" action="/ui/runs" class="mt-4 space-y-3">
+<section class="card border rule-2">
+  <div class="grid grid-cols-2 divide-y divide-[color:var(--rule)] sm:grid-cols-4 sm:divide-y-0 sm:divide-x">
+    {% for label, value, hint, href in [
+      ('Overdue invoices', overdue, 'Past their due date and still unpaid', none),
+      ('Pending approval', counters.pending, "Letters you haven't decided on yet", '/proposals'),
+      ('Approved today', counters.approved_today, 'Letters you approved since midnight', none),
+      ('Sent today', counters.sent_today, 'Letters delivered since midnight', '/outbox')
+    ] %}
+    <div class="group px-5 py-4 {% if href %}hover:bg-[color:var(--paper)]{% endif %}">
+      {% if href %}<a href="{{ href }}" class="block">{% endif %}
+        <div class="eyebrow flex items-baseline justify-between gap-2">
+          {{ label }}
+          {% if href %}<span class="opacity-0 transition group-hover:opacity-100">&rarr;</span>{% endif %}
+        </div>
+        <div class="mt-2 text-[2rem] font-semibold leading-none tracking-[-0.02em]">
+          {% if value is none %}
+            <span class="text-[color:var(--rule-2)]" title="Stripe could not be reached">&mdash;</span>
+          {% else %}{{ value }}{% endif %}
+        </div>
+        <div class="mt-2 text-xs leading-snug text-[color:var(--muted)]">{{ hint }}</div>
+      {% if href %}</a>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="mt-7 grid gap-7 lg:grid-cols-[19rem_1fr]">
+
+  {# --- The action that starts the work. ----------------------------------------- #}
+  <section class="card min-w-0 self-start border rule-2">
+    <div class="border-b rule px-5 py-3.5">
+      <h2 class="text-sm font-semibold">Find overdue invoices</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-[color:var(--muted)]">
+        Looks through Stripe for invoices past their due date and drafts a letter for each.
+        Nothing is sent.
+      </p>
+    </div>
+
+    <form method="post" action="/ui/runs" class="space-y-4 px-5 py-4">
       <label class="block">
-        <span class="text-xs font-medium text-slate-700">Goal <span class="font-normal text-slate-400">(optional)</span></span>
-        <textarea name="goal" rows="3" placeholder="Leave blank for the default collections goal."
-          class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm placeholder:text-slate-400"></textarea>
+        <span class="eyebrow">Where to look <span class="font-normal normal-case tracking-normal">(optional)</span></span>
+        <textarea name="goal" rows="3" placeholder="Leave blank to check all"
+ class="mt-1.5 w-full px-2.5 py-2 text-sm"></textarea>
       </label>
-      <div class="grid grid-cols-2 gap-3">
+
+      <div class="grid grid-cols-2 gap-4">
         <label class="block">
-          <span class="text-xs font-medium text-slate-700">Min days overdue</span>
-          <input type="number" name="min_days_overdue" value="1" min="0"
-            class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm tabular-nums">
+          <span class="eyebrow">Ignore under</span>
+          <span class="mt-1.5 flex items-baseline gap-2">
+            <input type="number" name="min_days_overdue" value="1" min="0" max="3650" step="1"
+ inputmode="numeric" pattern="[0-9]*"
+ class="mono w-full px-2.5 py-2">
+            <span class="text-xs text-[color:var(--muted)]">days</span>
+          </span>
         </label>
         <label class="block">
-          <span class="text-xs font-medium text-slate-700">Max proposals</span>
-          <input type="number" name="max_proposals" value="{{ max_proposals }}" min="1"
-            class="mt-1 w-full rounded-md border border-slate-300 p-2 text-sm tabular-nums">
+          <span class="eyebrow">Stop after</span>
+          <span class="mt-1.5 flex items-baseline gap-2">
+            <input type="number" name="max_proposals" value="{{ max_proposals }}" min="1" max="{{ max_proposals }}" step="1"
+ inputmode="numeric" pattern="[0-9]*"
+ class="mono w-full px-2.5 py-2">
+            <span class="text-xs text-[color:var(--muted)]">letters</span>
+          </span>
         </label>
       </div>
-      <button class="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
-        Start agent run
+
+      <button class="btn-primary inline-flex w-full items-center justify-center gap-2 px-3 py-2.5 text-sm">
+        <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+        Find overdue invoices
       </button>
     </form>
   </section>
 
-  {# --- Counters ---------------------------------------------------------------- #}
-  <section class="space-y-6 lg:col-span-2">
-    {# Section 9: "Counters: overdue invoices, pending proposals, approved today, sent today."
-       Each card's one-line explanation is shown rather than hidden in a tooltip, because a
-       counter nobody can interpret is a counter nobody trusts. #}
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {% for label, value, hint in [
-        ('Overdue invoices', overdue, 'Open and past due in Stripe right now'),
-        ('Pending approval', counters.pending, 'Letters waiting for a human decision'),
-        ('Approved today', counters.approved_today, 'Approvals recorded since midnight UTC'),
-        ('Sent today', counters.sent_today, 'Executions the gateway completed since midnight UTC')
-      ] %}
-      <div class="rounded-lg border rule bg-white p-4">
-        <div class="text-[1.75rem] font-semibold leading-none tabular-nums">
-          {% if value is none %}<span class="text-slate-300" title="Stripe could not be reached">&mdash;</span>
-          {% else %}{{ value }}{% endif %}
-        </div>
-        <div class="mt-1.5 text-sm font-medium">{{ label }}</div>
-        <div class="mt-0.5 text-xs leading-snug text-slate-500">{{ hint }}</div>
-      </div>
-      {% endfor %}
+  {# --- The record of what has been run. ----------------------------------------- #}
+  <section class="card min-w-0 self-start border rule-2">
+    <div class="flex items-baseline justify-between border-b rule px-5 py-3.5">
+      <h2 class="text-sm font-semibold">Recent checks</h2>
+      <a href="/proposals" class="link text-xs">Go to review &rarr;</a>
     </div>
 
-    <div class="self-start rounded-lg border rule bg-white">
-      <div class="flex items-baseline justify-between border-b rule px-5 py-3">
-        <h2 class="text-sm font-semibold">Recent runs</h2>
-        <a href="/proposals" class="text-xs text-blue-700 hover:underline">Go to the queue &rarr;</a>
-      </div>
-      {% if runs %}
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b rule text-left">
-              <th class="eyebrow px-5 py-2">Started</th>
-              <th class="eyebrow px-5 py-2">Status</th>
-              <th class="eyebrow px-5 py-2 text-right">Tool calls</th>
-              <th class="eyebrow px-5 py-2 text-right">Proposals</th>
-              <th class="px-5 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for run in runs %}
-            <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
-              <td class="whitespace-nowrap px-5 py-2.5 text-slate-600">{{ run.started_at.strftime('%d %b %H:%M:%S') }}</td>
-              <td class="px-5 py-2.5">{% include "partials/run_status.html" %}</td>
-              <td class="px-5 py-2.5 text-right tabular-nums">{{ run.tool_calls }}</td>
-              <td class="px-5 py-2.5 text-right tabular-nums">{{ run.proposals }}</td>
-              <td class="px-5 py-2.5 text-right">
-                <a class="text-blue-700 hover:underline" href="/runs/{{ run.id }}">transcript</a>
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <p class="px-5 py-8 text-sm text-slate-500">No runs yet. Start one on the left.</p>
-      {% endif %}
+    {% if runs %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b rule-2 text-left">
+            <th class="eyebrow px-5 py-2.5 font-semibold">Started</th>
+            <th class="eyebrow px-5 py-2.5 font-semibold">Status</th>
+            <th class="eyebrow px-5 py-2.5 text-right font-semibold">Steps</th>
+            <th class="eyebrow px-5 py-2.5 text-right font-semibold">Letters</th>
+            <th class="px-5 py-2.5"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for run in runs %}
+          <tr class="border-b rule last:border-0 hover:bg-[color:var(--paper)]">
+            <td class="mono whitespace-nowrap px-5 py-2.5 text-[color:var(--muted)]">
+              {{ run.started_at.strftime('%d %b %H:%M:%S') }}
+            </td>
+            <td class="px-5 py-2.5">{% include "partials/run_status.html" %}</td>
+            <td class="mono px-5 py-2.5 text-right">{{ run.tool_calls }}</td>
+            <td class="mono px-5 py-2.5 text-right {% if not run.proposals %}text-[color:var(--muted)]{% endif %}">
+              {{ run.proposals }}
+            </td>
+            <td class="px-5 py-2.5 text-right">
+              <a class="link text-xs" href="/runs/{{ run.id }}">See what it did</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}
+    <p class="px-5 py-10 text-sm text-[color:var(--muted)]">
+      Nothing yet. Use the form on the left to find overdue invoices.
+    </p>
+    {% endif %}
   </section>
 </div>
 {% endblock %}

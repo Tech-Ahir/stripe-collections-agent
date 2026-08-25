@@ -1,28 +1,28 @@
 {% if proposals %}
-<ul class="divide-y divide-slate-100">
+<ul class="divide-y divide-[color:var(--rule)]">
   {% for p in proposals %}
   <li class="px-5 py-3.5">
     <div class="flex items-baseline justify-between gap-2">
       <span class="truncate text-sm font-medium">{{ p.customer_name or p.customer_email }}</span>
       <span class="shrink-0 text-sm font-medium tabular-nums">{{ p.amount_display }}</span>
     </div>
-    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-      <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">{{ p.tone }}</span>
-      <span>{{ p.days_overdue }} days overdue</span>
+    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[color:var(--muted)]">
+      <span class="rounded paper px-1.5 py-0.5 text-[color:var(--ink)]">{{ p.tone }}</span>
+      <span>{{ p.days_overdue }} day{{ "" if p.days_overdue == 1 else "s" }} overdue</span>
       <span class="rounded px-1.5 py-0.5
-        {% if p.status == 'pending' %}bg-amber-50 text-amber-900
-        {% elif p.status == 'executed' %}bg-emerald-50 text-emerald-900
-        {% elif p.status in ('rejected', 'expired', 'failed') %}bg-slate-100 text-slate-600
-        {% else %}bg-blue-50 text-blue-900{% endif %}">
-        {% if p.status == 'pending' %}awaiting approval{% else %}{{ p.status }}{% endif %}
+        {% if p.status == 'pending' %}bg-[color:var(--wait-bg)] text-[color:var(--wait)]
+        {% elif p.status == 'executed' %}bg-[color:var(--good-bg)] text-[color:var(--good)]
+        {% elif p.status in ('rejected', 'expired', 'failed') %}paper text-[color:var(--muted)]
+        {% else %}bg-[#e5edf4] text-[#22506f]{% endif %}">
+        {% if p.status == 'pending' %}waiting for you{% else %}{{ p.status }}{% endif %}
       </span>
     </div>
-    <p class="mt-1.5 text-xs leading-relaxed text-slate-600">{{ p.rationale }}</p>
-    <a class="mt-1 inline-block text-xs text-blue-700 hover:underline"
-       href="/proposals?selected={{ p.id }}">review &rarr;</a>
+    <p class="mt-1.5 text-xs leading-relaxed text-[color:var(--muted)]">{{ p.rationale }}</p>
+    <a class="mt-1 inline-block text-xs link"
+ href="/proposals?selected={{ p.id }}">Read and decide &rarr;</a>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="px-5 py-8 text-sm text-slate-500">No proposals yet.</p>
+<p class="px-5 py-8 text-sm text-[color:var(--muted)]">No letters yet.</p>
 {% endif %}

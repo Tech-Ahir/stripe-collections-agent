@@ -107,6 +107,11 @@ def days_overdue(due_date_epoch: int | None, *, now: datetime | None = None) -> 
     return max(0, delta.days)
 
 
+def _days(count: int | None) -> str:
+    """"1 day", not "1 days". This string is read by the operator and by the agent."""
+    return f"{count} day" if count == 1 else f"{count} days"
+
+
 def _iso_date(epoch: int | None) -> str | None:
     return from_epoch(epoch).date().isoformat() if epoch else None
 
@@ -257,12 +262,12 @@ def project_payment_history_entry(raw: Any, *, now: datetime | None = None) -> d
     }
     if _get(raw, "status") == "paid":
         entry["outcome"] = (
-            "paid on time" if (days_late or 0) == 0 else f"paid {days_late} days late"
+            "paid on time" if (days_late or 0) == 0 else f"paid {_days(days_late)} late"
         )
     elif _get(raw, "status") == "open":
         still_owed = days_overdue(due_epoch, now=now)
         entry["outcome"] = (
-            f"still unpaid, {still_owed} days overdue" if still_owed else "still unpaid"
+            f"still unpaid, {_days(still_owed)} overdue" if still_owed else "still unpaid"
         )
     else:
         entry["outcome"] = f"{_get(raw, 'status')}"

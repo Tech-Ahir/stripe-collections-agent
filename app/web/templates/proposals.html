@@ -5,13 +5,13 @@
 <div class="grid gap-6 lg:grid-cols-[21rem_1fr]">
 
   {# --- Left: the queue, sorted by amount descending (section 9) ---------------- #}
-  <aside class="self-start rounded-lg border rule bg-white">
+  <aside class="self-start border rule card">
     <div class="border-b rule px-4 py-3">
-      <h1 class="text-sm font-semibold">Approval queue</h1>
-      <div class="mt-2.5 inline-flex rounded-md border rule p-0.5 text-xs">
+      <h1 class="text-sm font-semibold">Letters to review</h1>
+      <div class="mt-2.5 inline-flex border rule p-0.5 text-xs">
         {% for option in ['pending', 'all'] %}
           <a href="/proposals?status={{ option }}"
-             class="rounded px-2.5 py-1 {% if status_filter == option %}bg-slate-900 font-medium text-white{% else %}text-slate-600 hover:text-slate-900{% endif %}">
+ class="rounded px-2.5 py-1 {% if status_filter == option %}bg-slate-900 font-medium text-white{% else %}text-[color:var(--muted)] hover:text-[color:var(--ink)]{% endif %}">
             {{ option }}
           </a>
         {% endfor %}
@@ -19,23 +19,23 @@
     </div>
 
     {% if queue %}
-    <ul class="divide-y divide-slate-100">
+    <ul class="divide-y divide-[color:var(--rule)]">
       {% for p in queue %}
       <li>
         <a href="/proposals?selected={{ p.id }}&status={{ status_filter }}"
-           class="block border-l-2 px-4 py-3 {% if detail and detail.id == p.id %}border-slate-900 bg-slate-50{% else %}border-transparent hover:bg-slate-50/70{% endif %}">
+ class="block border-l-2 px-4 py-3 {% if detail and detail.id == p.id %}border-slate-900 paper{% else %}border-transparent hover:bg-[color:var(--paper)]/70{% endif %}">
           <div class="flex items-baseline justify-between gap-2">
             <span class="truncate text-sm font-medium">{{ p.customer_name or p.customer_email }}</span>
             <span class="shrink-0 text-sm font-medium tabular-nums">{{ p.amount_display }}</span>
           </div>
           <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <span class="rounded px-1.5 py-0.5
-              {% if p.tone == 'friendly' %}bg-emerald-50 text-emerald-900
-              {% elif p.tone == 'firm' %}bg-amber-50 text-amber-900
-              {% else %}bg-rose-50 text-rose-900{% endif %}">{{ p.tone }}</span>
-            <span class="text-slate-500">{{ p.days_overdue }}d overdue</span>
+              {% if p.tone == 'friendly' %}bg-[color:var(--good-bg)] text-[color:var(--good)]
+              {% elif p.tone == 'firm' %}bg-[color:var(--wait-bg)] text-[color:var(--wait)]
+              {% else %}bg-[color:var(--stop-bg)] text-[color:var(--stop)]{% endif %}">{{ p.tone }}</span>
+            <span class="text-[color:var(--muted)]">{{ p.days_overdue }}d overdue</span>
             {% if p.status != 'pending' %}
-              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{ p.status }}</span>
+              <span class="rounded paper px-1.5 py-0.5 text-[color:var(--muted)]">{{ p.status }}</span>
             {% endif %}
           </div>
         </a>
@@ -43,34 +43,34 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="px-4 py-8 text-sm leading-relaxed text-slate-500">
-      Nothing {{ 'pending' if status_filter == 'pending' else 'here' }}.
-      <a href="/" class="text-blue-700 hover:underline">Start a run</a>.
+    <p class="px-4 py-8 text-sm leading-relaxed text-[color:var(--muted)]">
+      {% if status_filter == 'pending' %}Nothing waiting for you.{% else %}Nothing here.{% endif %}
+      <a href="/" class="link">Find overdue invoices</a>.
     </p>
     {% endif %}
   </aside>
 
   {# --- Right: the selected proposal --------------------------------------------- #}
-  <section>
+  <section class="min-w-0">
   {% if detail %}
     {# Rationale FIRST -- section 9: "the agent's rationale first, then invoice facts,
-       then payment history, then the letter". The numbers make that order visible: they
-       are not decoration, they are the order this should be read in. #}
-    <div class="rounded-lg border rule bg-white">
+ then payment history, then the letter". The numbers make that order visible: they
+ are not decoration, they are the order this should be read in. #}
+    <div class="border rule card">
       <div class="border-b rule px-6 py-4">
         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 class="text-base font-semibold">{{ detail.customer_name or detail.customer_email }}</h2>
           <span class="text-base font-medium tabular-nums">{{ detail.amount_display }}</span>
           <span class="rounded px-1.5 py-0.5 text-xs
-            {% if detail.tone == 'friendly' %}bg-emerald-50 text-emerald-900
-            {% elif detail.tone == 'firm' %}bg-amber-50 text-amber-900
-            {% else %}bg-rose-50 text-rose-900{% endif %}">{{ detail.tone }}</span>
-          <span class="text-sm text-slate-500">{{ detail.days_overdue }} days overdue</span>
+            {% if detail.tone == 'friendly' %}bg-[color:var(--good-bg)] text-[color:var(--good)]
+            {% elif detail.tone == 'firm' %}bg-[color:var(--wait-bg)] text-[color:var(--wait)]
+            {% else %}bg-[color:var(--stop-bg)] text-[color:var(--stop)]{% endif %}">{{ detail.tone }}</span>
+          <span class="text-sm text-[color:var(--muted)]">{{ detail.days_overdue }} day{{ "" if detail.days_overdue == 1 else "s" }} overdue</span>
           <span class="ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium
-            {% if detail.status == 'pending' %}bg-amber-50 text-amber-900
-            {% elif detail.status == 'executed' %}bg-emerald-50 text-emerald-900
-            {% else %}bg-slate-100 text-slate-700{% endif %}">
-            {% if detail.status == 'pending' %}awaiting approval{% else %}{{ detail.status }}{% endif %}
+            {% if detail.status == 'pending' %}bg-[color:var(--wait-bg)] text-[color:var(--wait)]
+            {% elif detail.status == 'executed' %}bg-[color:var(--good-bg)] text-[color:var(--good)]
+            {% else %}paper text-[color:var(--ink)]{% endif %}">
+            {% if detail.status == 'pending' %}waiting for you{% else %}{{ detail.status }}{% endif %}
           </span>
         </div>
       </div>
@@ -80,12 +80,12 @@
           <span class="step-no">1</span>
           <span class="eyebrow">Why this invoice, this tone</span>
         </div>
-        <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-800">{{ detail.rationale }}</p>
+        <p class="mt-2 max-w-3xl text-sm leading-relaxed text-[color:var(--ink)]">{{ detail.rationale }}</p>
       </div>
 
       {# --- Invoice facts, then payment history ---------------------------------- #}
-      <div class="grid gap-px border-b rule bg-slate-100 sm:grid-cols-2">
-        <dl class="bg-white px-6 py-4 text-sm">
+      <div class="border-b rule">
+        <dl class="card px-6 py-4 text-sm">
           <div class="flex items-center gap-2">
             <span class="step-no">2</span>
             <span class="eyebrow">Invoice facts</span>
@@ -93,58 +93,28 @@
           <div class="mt-2.5 space-y-1.5">
             {% for label, key in [
               ('Invoice', 'invoice_number'), ('Amount', 'amount_display'),
-              ('Due', 'due_date'), ('Days overdue', 'days_overdue'),
-              ('Recipient', 'customer_email')
+              ('Was due', 'due_date'), ('Days overdue', 'days_overdue'),
+              ('Goes to', 'customer_email')
             ] %}
             <div class="flex justify-between gap-3">
-              <dt class="text-slate-500">{{ label }}</dt>
+              <dt class="text-[color:var(--muted)]">{{ label }}</dt>
               <dd class="text-right font-medium tabular-nums">{{ detail.invoice_facts.get(key) }}</dd>
             </div>
             {% endfor %}
             <div class="flex justify-between gap-3">
-              <dt class="text-slate-500">Payment link</dt>
+              <dt class="text-[color:var(--muted)]">Payment link</dt>
               <dd class="truncate text-right">
-                <a class="text-blue-700 hover:underline" target="_blank" rel="noopener"
-                   href="{{ detail.invoice_facts.get('hosted_invoice_url') }}">hosted invoice</a>
+                <a class="link" target="_blank" rel="noopener"
+ href="{{ detail.invoice_facts.get('hosted_invoice_url') }}">Open in Stripe</a>
               </dd>
             </div>
           </div>
-          <p class="mt-3 max-w-prose text-xs leading-relaxed text-slate-500">
+          <p class="mt-3 max-w-prose text-xs leading-relaxed text-[color:var(--muted)]">
             These are the values the tool layer retrieved. Every figure in the letter is
-            checked against them, so nothing in it was recalled by the model.
+ checked against them, so nothing in it was recalled by the model.
           </p>
         </dl>
 
-        <div class="bg-white px-6 py-4 text-sm">
-          <div class="eyebrow">Integrity</div>
-          <div class="mt-2.5 space-y-1.5">
-            <div class="flex justify-between gap-3">
-              <span class="text-slate-500">Payload hash</span>
-              <span class="mono truncate text-right text-xs" title="{{ detail.payload_hash }}">{{ detail.payload_hash[7:23] }}…</span>
-            </div>
-            <div class="flex justify-between gap-3">
-              <span class="text-slate-500">Expires</span>
-              <span class="text-right">{{ detail.expires_at.strftime('%d %b %H:%M') }}</span>
-            </div>
-            <div class="flex justify-between gap-3">
-              <span class="text-slate-500">From run</span>
-              <span class="text-right">
-                <a class="text-blue-700 hover:underline" href="/runs/{{ detail.run_id }}">{{ detail.run_id[:8] }}…</a>
-              </span>
-            </div>
-          </div>
-          <p class="mt-3 max-w-prose text-xs leading-relaxed text-slate-500">
-            The gateway re-hashes this letter and compares. Approving one letter cannot be
-            used to send a different one.
-          </p>
-          {% if detail.executions %}
-          <div class="mt-3 space-y-1 rounded-md bg-slate-50 px-3 py-2 text-xs">
-            {% for ex in detail.executions %}
-              <div>execution {{ ex.id }} · {{ ex.status }}{% if ex.error %} · {{ ex.error }}{% endif %}</div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        </div>
       </div>
 
       {# --- Payment history, between the facts and the letter (section 9) --------- #}
@@ -157,7 +127,7 @@
         <div class="mt-2.5 overflow-x-auto">
           <table class="w-full text-xs">
             <thead>
-              <tr class="border-b rule text-left text-slate-500">
+              <tr class="border-b rule text-left text-[color:var(--muted)]">
                 <th class="py-1.5 pr-4 font-medium">Invoice</th>
                 <th class="py-1.5 pr-4 font-medium">Due</th>
                 <th class="py-1.5 pr-4 text-right font-medium">Amount</th>
@@ -166,31 +136,35 @@
             </thead>
             <tbody>
               {% for entry in detail.payment_history %}
-              <tr class="border-b border-slate-50 last:border-0">
-                <td class="mono py-1.5 pr-4">{{ entry.number or entry.invoice_id[:14] }}</td>
-                <td class="py-1.5 pr-4 text-slate-600">{{ entry.due_date or '—' }}</td>
+              {% set is_this_one = entry.invoice_id == detail.invoice_facts.get('invoice_id') %}
+              <tr class="border-b rule last:border-0">
+                <td class="mono py-1.5 pr-4">
+                  {{ entry.number or entry.invoice_id[:14] }}
+                  {% if is_this_one %}<span class="ml-1 rounded paper px-1 text-[color:var(--muted)]">this invoice</span>{% endif %}
+                </td>
+                <td class="py-1.5 pr-4 text-[color:var(--muted)]">{{ entry.due_date or '—' }}</td>
                 <td class="py-1.5 pr-4 text-right tabular-nums">{{ entry.amount_due_display }}</td>
                 <td class="py-1.5">
                   <span class="rounded px-1.5 py-0.5
-                    {% if entry.outcome and 'on time' in entry.outcome %}bg-emerald-50 text-emerald-900
-                    {% elif entry.outcome and 'late' in entry.outcome %}bg-amber-50 text-amber-900
-                    {% elif entry.outcome and 'unpaid' in entry.outcome %}bg-rose-50 text-rose-900
-                    {% else %}bg-slate-100 text-slate-600{% endif %}">{{ entry.outcome }}</span>
+                    {% if entry.outcome and 'on time' in entry.outcome %}bg-[color:var(--good-bg)] text-[color:var(--good)]
+                    {% elif entry.outcome and 'late' in entry.outcome %}bg-[color:var(--wait-bg)] text-[color:var(--wait)]
+                    {% elif entry.outcome and 'unpaid' in entry.outcome %}bg-[color:var(--stop-bg)] text-[color:var(--stop)]
+                    {% else %}paper text-[color:var(--muted)]{% endif %}">{{ entry.outcome }}</span>
                 </td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
-        <p class="mt-2 max-w-prose text-xs leading-relaxed text-slate-500">
+        <p class="mt-2 max-w-prose text-xs leading-relaxed text-[color:var(--muted)]">
           This is what the agent saw when it chose the tone, taken from the run transcript
-          rather than re-fetched &mdash; so it is the basis for its decision, not a later
-          snapshot.
+ rather than re-fetched &mdash; so it is the basis for its decision, not a later
+ snapshot.
         </p>
         {% else %}
-        <p class="mt-2 max-w-prose text-sm text-slate-600">
+        <p class="mt-2 max-w-prose text-sm text-[color:var(--muted)]">
           The agent did not look up this customer's payment history for this proposal, so the
-          tone was chosen on the age and amount alone.
+ tone was chosen on the age and amount alone.
         </p>
         {% endif %}
       </div>
@@ -202,50 +176,60 @@
             <span class="step-no">4</span>
             <span class="eyebrow">The letter</span>
           </div>
-          <div class="text-sm text-slate-500">Subject: <span class="font-medium text-slate-900">{{ detail.subject }}</span></div>
+          <div class="text-sm text-[color:var(--muted)]">Subject: <span class="font-medium text-[color:var(--ink)]">{{ detail.subject }}</span></div>
         </div>
 
         {% if detail.status == 'pending' %}
         <form id="letter-form" class="mt-3">
-          <textarea name="body" id="letter-body" rows="16"
-            class="sheet w-full rounded-md border border-slate-300 px-4 py-3 focus:border-slate-400">{{ detail.body }}</textarea>
-          <p class="mt-1.5 max-w-prose text-xs leading-relaxed text-slate-500">
-            You may edit this before approving. Saving an edit
-            <strong class="font-semibold">invalidates any prior hash</strong>, and approving mints the token
-            from what you see here &mdash; so you approve what you actually read.
-          </p>
+          {# The letter reads as a letter until you decide to change it. The textarea is
+ present from the start but carries no `name` until then, so an untouched letter
+ sends nothing and is approved exactly as drafted. #}
+          <div id="letter-read" class="sheet whitespace-pre-wrap break-words border rule px-4 py-3">{{ detail.body }}</div>
+          <textarea id="letter-body" rows="16"
+ class="sheet hidden w-full border rule-2 px-4 py-3 focus:border-[color:var(--muted)]">{{ detail.body }}</textarea>
 
-          <div class="mt-3">
-            <button type="button"
-              hx-post="/ui/proposals/{{ detail.id }}/edit"
-              hx-include="#letter-body"
-              hx-target="#decision" hx-swap="innerHTML"
-              class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">
-              Save edit
+          <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button type="button" id="edit-letter"
+ class="btn-quiet inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-pen"/></svg>
+              Edit letter
             </button>
+            <button type="button" id="save-letter"
+ hx-post="/ui/proposals/{{ detail.id }}/edit"
+ hx-include="#letter-body"
+ hx-target="#decision" hx-swap="innerHTML"
+ class="hidden border rule-2 px-3 py-1.5 text-xs font-medium hover:bg-[color:var(--paper)]">
+              Save changes
+            </button>
+            <span class="max-w-prose text-xs leading-relaxed text-[color:var(--muted)]">
+              Approving uses exactly the words in this box, so you always approve what you
+ just read.
+            </span>
           </div>
 
           {# The two decisions, each next to the note that belongs to it. #}
-          <div class="mt-5 grid gap-5 border-t rule pt-5 sm:grid-cols-2">
+          <div class="sticky bottom-0 mt-5 grid gap-5 border-t rule card pt-5 pb-4 backdrop-blur sm:grid-cols-2">
             <div>
-              <input id="approve-note" name="note" placeholder="Approval note (optional)"
-                class="w-full rounded-md border border-slate-300 p-2 text-sm placeholder:text-slate-400">
+              <input id="approve-note" name="note" placeholder="Note for the record (optional)"
+ class="w-full border rule-2 p-2 text-sm placeholder:text-[color:var(--muted)]">
               <button type="button"
-                hx-post="/ui/proposals/{{ detail.id }}/approve"
-                hx-include="#letter-body, #approve-note"
-                hx-target="#decision" hx-swap="innerHTML"
-                class="mt-2 w-full rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800">
+ hx-post="/ui/proposals/{{ detail.id }}/approve"
+ hx-include="#letter-body, #approve-note"
+ hx-target="#decision" hx-swap="innerHTML"
+ class="mt-2 inline-flex w-full items-center justify-center gap-2 bg-[color:var(--good)] px-3 py-2 text-sm font-medium text-white hover:bg-[#24503b]">
+                <svg class="i" aria-hidden="true"><use href="#i-send"/></svg>
                 Approve &amp; send
               </button>
             </div>
             <div>
-              <input id="reject-note" name="note" placeholder="Rejection note (required to reject)"
-                class="w-full rounded-md border border-slate-300 p-2 text-sm placeholder:text-slate-400">
+              <input id="reject-note" name="note" placeholder="Why are you rejecting it?"
+ class="w-full border rule-2 p-2 text-sm placeholder:text-[color:var(--muted)]">
               <button type="button"
-                hx-post="/ui/proposals/{{ detail.id }}/reject"
-                hx-include="#reject-note"
-                hx-target="#decision" hx-swap="innerHTML"
-                class="mt-2 w-full rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-800 hover:bg-rose-50">
+ hx-post="/ui/proposals/{{ detail.id }}/reject"
+ hx-include="#reject-note"
+ hx-target="#decision" hx-swap="innerHTML"
+ class="mt-2 inline-flex w-full items-center justify-center gap-2 border border-[#efcdc4] px-3 py-2 text-sm font-medium text-[color:var(--stop)] hover:bg-[color:var(--stop-bg)]">
+                <svg class="i" aria-hidden="true"><use href="#i-x"/></svg>
                 Reject
               </button>
             </div>
@@ -254,38 +238,98 @@
           {% if unapproved_demo %}
           <div class="mt-5 flex justify-end border-t rule pt-4">
             <button type="button"
-              hx-post="/ui/proposals/{{ detail.id }}/attempt-unapproved"
-              hx-target="#decision" hx-swap="innerHTML"
-              class="rounded-md border border-dashed border-slate-400 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              title="Asks the gateway to send this letter with a correctly signed token, while it is still pending. The gateway refuses at check 4 because it reads the status from its own database.">
+ hx-post="/ui/proposals/{{ detail.id }}/attempt-unapproved"
+ hx-target="#decision" hx-swap="innerHTML"
+ class="inline-flex items-center gap-1.5 border border-dashed border-[color:var(--muted)] px-3 py-2 text-sm text-[color:var(--ink)] hover:bg-[color:var(--paper)]"
+ title="Asks the gateway to send this letter with a correctly signed token, while it is still pending. The gateway refuses at check 4 because it reads the status from its own database.">
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-alert"/></svg>
               Try to send without approval
             </button>
           </div>
           {% endif %}
         </form>
+
+        <script>
+          // Read-only until asked. HTMX sends named fields only, so giving the textarea its
+          // name is exactly what turns "I am reading this" into "I am editing this".
+          (function () {
+ const read = document.getElementById("letter-read");
+ const body = document.getElementById("letter-body");
+ const edit = document.getElementById("edit-letter");
+ const save = document.getElementById("save-letter");
+ if (!read || !body || !edit || !save) return;
+
+ edit.addEventListener("click", function () {
+ body.name = "body";
+ read.classList.add("hidden");
+ body.classList.remove("hidden");
+ edit.classList.add("hidden");
+ save.classList.remove("hidden");
+ body.focus();
+ body.setSelectionRange(body.value.length, body.value.length);
+            });
+          })();
+        </script>
         {% else %}
-        <div class="sheet mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-md border rule px-4 py-3">{{ detail.body }}</div>
+        <div class="sheet mt-3 max-h-96 overflow-auto whitespace-pre-wrap border rule px-4 py-3">{{ detail.body }}</div>
         {% if detail.approvals %}
-        <div class="mt-3 space-y-1 text-sm text-slate-600">
+        <div class="mt-3 space-y-1 text-sm text-[color:var(--muted)]">
           {% for a in detail.approvals %}
             <div>
               <span class="font-medium">{{ a.decision }}</span> by
               <span class="mono text-xs">{{ a.actor }}</span>
-              at {{ a.decided_at.strftime('%d %b %H:%M:%S') }}
+ at {{ a.decided_at.strftime('%d %b %H:%M:%S') }}
               {% if a.note %}&mdash; {{ a.note }}{% endif %}
-              {% if a.edited %}<span class="rounded bg-slate-100 px-1.5 text-xs">edited before approval</span>{% endif %}
+              {% if a.edited %}<span class="rounded paper px-1.5 text-xs">edited before approval</span>{% endif %}
             </div>
           {% endfor %}
         </div>
         {% endif %}
         {% endif %}
+        <div class="mt-5 border-t rule pt-4 text-sm">
+          <div class="eyebrow inline-flex items-center gap-1.5">
+            <svg class="i i-sm" aria-hidden="true"><use href="#i-lock"/></svg>
+            Locked to this exact text
+          </div>
+          <div class="mt-2 flex flex-wrap gap-x-8 gap-y-1">
+            <div class="flex items-baseline gap-2">
+              <span class="text-[color:var(--muted)]">Fingerprint</span>
+              <span class="mono truncate text-right text-xs" title="{{ detail.payload_hash }}">{{ detail.payload_hash[7:23] }}…</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-[color:var(--muted)]">Expires</span>
+              <span class="text-right">{{ detail.expires_at.strftime('%d %b %H:%M') }}</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-[color:var(--muted)]">From check</span>
+              <span class="text-right">
+                <a class="link" href="/runs/{{ detail.run_id }}">the check that wrote it</a>
+              </span>
+            </div>
+          </div>
+          <p class="mt-2 max-w-prose text-xs leading-relaxed text-[color:var(--muted)]">
+            The gateway re-hashes this letter and compares. Approving one letter cannot be
+ used to send a different one.
+          </p>
+          {% if detail.executions %}
+          <div class="mt-3 space-y-1 paper px-3 py-2 text-xs">
+            {% for ex in detail.executions %}
+              <div>
+                Send attempt · {% if ex.status == 'succeeded' %}succeeded{% elif ex.status == 'pending' %}in progress{% else %}{{ ex.status }}{% endif %}
+                {% if ex.error %}<span class="text-[color:var(--stop)]">· {{ ex.error }}</span>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
       </div>
     </div>
 
     <div id="decision" class="mt-4"></div>
 
   {% else %}
-    <div class="rounded-lg border rule bg-white px-6 py-12 text-center text-sm text-slate-500">
+    <div class="border rule card px-6 py-12 text-center text-sm text-[color:var(--muted)]">
       Select a proposal on the left.
     </div>
   {% endif %}

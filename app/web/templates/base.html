@@ -1,27 +1,63 @@
 {# The shell. Tailwind from a CDN, HTMX for interaction, no build step (section 9).
 
-   Two surfaces, deliberately distinct: quiet app chrome in a sans face, and the letter
-   itself on a warm sheet in a serif. The letter is correspondence a customer receives and
-   proofreading it is the reviewer's job, so it should not look like UI. #}
+   The design is a ledger. This is accounts-receivable work, done every morning by the same
+   person: money owed, figures in columns, a record that can be checked afterwards. So the
+   page is warm paper with ruled bands rather than floating cards, hairlines rather than
+   shadows, and tabular figures everywhere a number appears.
+
+   Two type roles, and one exception. IBM Plex Sans carries the interface and IBM Plex Mono
+   carries figures and identifiers -- an engineered, institutional pair for a system whose
+   whole argument is that it can be audited. The exception is the letter itself, set in a
+   serif on a warmer sheet: it is correspondence a customer receives, and proofreading it is
+   the job, so it must not look like UI. #}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Collections Agent{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <style>
     [x-cloak] { display: none; }
+
     :root {
-      --rule:  #e3e6ea;   /* hairlines */
-      --muted: #5b6472;   /* labels, captions */
-      --sheet: #fbfaf7;   /* the letter surface */
+      --paper:   #faf7f2;
+      --card:    #ffffff;
+      --rule:    #e6e0d6;
+      --rule-2:  #d5cdbf;
+      --ink:     #1b1815;
+      --muted:   #6a6155;
+      --sheet:   #fbf6ea;
+      --wait:    #8a5a12;
+      --wait-bg: #fbf1dd;
+      --good:    #2c6047;
+      --good-bg: #e6efe9;
+      --stop:    #93321f;
+      --stop-bg: #fbeae6;
+      --link:    #1f4f8f;
     }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .rule { border-color: var(--rule); }
-    /* The document face. A serif at a generous measure is easier to proofread, and it marks
-       the letter as the thing that leaves the building. */
+
+    html { background: var(--paper); }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+    }
+    .rule   { border-color: var(--rule); }
+    .rule-2 { border-color: var(--rule-2); }
+    .paper  { background: var(--paper); }
+    .card   { background: var(--card); }
+
     .sheet {
       background: var(--sheet);
       font-family: ui-serif, Georgia, "Times New Roman", serif;
@@ -29,70 +65,122 @@
       line-height: 1.7;
       overflow-wrap: break-word;
     }
+
     .eyebrow {
-      font-size: 0.6875rem; letter-spacing: 0.07em; text-transform: uppercase;
-      font-weight: 600; color: var(--muted);
+      font-size: 0.6875rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--muted);
     }
-    /* A quiet numbered marker for the reading order of a review. The order is real -- the
-       rationale, then the facts, then the history, then the letter -- so numbering it
-       carries information rather than decorating. */
+
     .step-no {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 1.25rem; height: 1.25rem; border-radius: 9999px;
-      background: #eef1f4; color: var(--muted);
-      font-size: 0.625rem; font-weight: 700; font-variant-numeric: tabular-nums;
+      width: 1.25rem; height: 1.25rem;
+      background: var(--paper); border: 1px solid var(--rule-2);
+      color: var(--muted);
+      font-size: 0.625rem; font-weight: 600; font-variant-numeric: tabular-nums;
     }
-    :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+
+    .tag {
+      display: inline-flex; align-items: center; gap: 0.375rem;
+      padding: 0.0625rem 0.4375rem;
+      font-size: 0.75rem; font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .tag-wait { background: var(--wait-bg); border-color: #eddcb8; color: var(--wait); }
+    .tag-good { background: var(--good-bg); border-color: #c9ded3; color: var(--good); }
+    .tag-stop { background: var(--stop-bg); border-color: #efcdc4; color: var(--stop); }
+    .tag-flat { background: var(--paper);   border-color: var(--rule-2); color: var(--muted); }
+
+    a { color: inherit; }
+    .link {
+      color: var(--link);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      text-decoration-color: #b9cbe4;
+    }
+    .link:hover { text-decoration-color: currentColor; }
+
+    .btn-primary { background: var(--ink); color: #fff; font-weight: 500; border: 1px solid var(--ink); }
+    .btn-primary:hover { background: #322c26; }
+    .btn-quiet { background: var(--card); border: 1px solid var(--rule-2); color: var(--ink); font-weight: 500; }
+    .btn-quiet:hover { background: var(--paper); }
+
+    input, textarea, select { background: var(--card); border: 1px solid var(--rule-2); color: var(--ink); }
+    input:focus, textarea:focus, select:focus { border-color: var(--muted); outline: none; }
+    ::placeholder { color: #948a7c; }
+
+    /* Icons are drawn, not loaded: one sprite in the page, no library, no request. They
+       inherit colour and size from the text they sit in, so a tag, a button and a table row
+       all get the same glyph at the right weight without a second thought. */
+    .i {
+      width: 1em; height: 1em;
+      display: inline-block; vertical-align: -0.125em;
+      fill: none; stroke: currentColor;
+      stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+      flex: none;
+    }
+    .i-sm { width: 0.875em; height: 0.875em; }
+
+    /* Wide content scrolls inside its own box; the page itself never scrolls sideways.
+       A tool result is a single unbroken line of JSON, and without this it drags the whole
+       layout wider than the window the moment someone opens a disclosure. */
+    pre { max-width: 100%; overflow-x: auto; }
+    details { min-width: 0; }
+
+    :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body>
 
-<header class="border-b rule bg-white">
+{# The whole icon set. Drawn on a 24-unit grid, stroked, no fills: they read as marks in a
+   ledger rather than as app furniture. #}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 13 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L20 8a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m14 6 4 4"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-letter" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10.5 13.5"/><path d="M21 3l-6.8 18-3.7-7.5L3 9.8 21 3Z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.7 20h18.6L12 4Z"/><path d="M12 10v4"/><path d="M12 17.2v.2"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 8.5 15.5 15.5"/></symbol>
+  </defs>
+</svg>
+
+<header class="card border-b rule-2">
   <div class="mx-auto max-w-7xl px-6">
-    <div class="flex flex-wrap items-center gap-x-8 gap-y-2 py-3">
-      <a href="/" class="text-sm font-semibold tracking-tight">Collections&nbsp;Agent</a>
+    <div class="flex flex-wrap items-baseline gap-x-9 gap-y-2 py-3.5">
+      <a href="/" class="text-[0.9375rem] font-semibold tracking-[-0.01em]">Collections&nbsp;Agent</a>
 
-      <nav class="flex items-center gap-5 text-sm">
+      <nav class="flex items-baseline gap-6 text-sm">
         {% set here = request.url.path %}
-        <a class="border-b-2 pb-0.5 {% if here == '/' %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+        <a class="border-b-2 pb-1 {% if here == '/' %}border-[color:var(--ink)] font-medium{% else %}border-transparent text-[color:var(--muted)] hover:text-[color:var(--ink)]{% endif %}"
            href="/">Dashboard</a>
-        <a class="flex items-center gap-1.5 border-b-2 pb-0.5 {% if here.startswith('/proposals') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+        <a class="inline-flex items-baseline gap-1.5 border-b-2 pb-1 {% if here.startswith('/proposals') %}border-[color:var(--ink)] font-medium{% else %}border-transparent text-[color:var(--muted)] hover:text-[color:var(--ink)]{% endif %}"
            href="/proposals">
-          Queue{% if counters.pending %} <span class="rounded-full bg-amber-500 px-1.5 text-xs font-semibold leading-4 text-white">{{ counters.pending }}</span>{% endif %}
+          To review{% if counters.pending %} <span class="tag tag-wait">{{ counters.pending }}</span>{% endif %}
         </a>
-        <a class="border-b-2 pb-0.5 {% if here.startswith('/audit') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
+        <a class="border-b-2 pb-1 {% if here.startswith('/audit') %}border-[color:var(--ink)] font-medium{% else %}border-transparent text-[color:var(--muted)] hover:text-[color:var(--ink)]{% endif %}"
            href="/audit">Audit</a>
-        <a class="border-b-2 pb-0.5 {% if here.startswith('/outbox') %}border-slate-900 font-semibold{% else %}border-transparent text-slate-600 hover:text-slate-900{% endif %}"
-           href="/outbox">Outbox</a>
-        <a class="border-b-2 border-transparent pb-0.5 text-slate-500 hover:text-slate-900" href="/docs">API</a>
+        <a class="border-b-2 pb-1 {% if here.startswith('/outbox') %}border-[color:var(--ink)] font-medium{% else %}border-transparent text-[color:var(--muted)] hover:text-[color:var(--ink)]{% endif %}"
+           href="/outbox">Sent</a>
+        <a class="border-b-2 border-transparent pb-1 text-[color:var(--muted)] hover:text-[color:var(--ink)]" href="/docs">API</a>
       </nav>
-
-      <div class="ml-auto" hx-get="/ui/health" hx-trigger="load, every 10s" hx-swap="innerHTML">
-        <span class="text-xs text-slate-400">checking…</span>
-      </div>
     </div>
   </div>
 </header>
 
-<main class="mx-auto max-w-7xl px-6 py-6">
+<main class="mx-auto max-w-7xl px-6 py-7">
   {% block content %}{% endblock %}
 </main>
-
-<footer class="mx-auto max-w-7xl px-6 pb-10 pt-6">
-  <div class="border-t rule pt-4 text-xs leading-relaxed text-slate-500">
-    <p class="max-w-3xl">
-      The agent drafts; it cannot send. Every letter is reviewed here before anything leaves the
-      system, and the send is performed by a separate service the agent cannot reach.
-    </p>
-    <p class="mt-1">
-      Stripe test mode only. Operator <span class="mono">{{ operator }}</span> · model
-      <span class="mono">{{ model }}</span>
-    </p>
-  </div>
-</footer>
 
 </body>
 </html>

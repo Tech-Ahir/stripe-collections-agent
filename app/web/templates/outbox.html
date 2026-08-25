@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Outbox · Collections Agent{% endblock %}
 {% block content %}
-<div class="rounded-lg border rule bg-white">
+<div class="border rule card">
   <div class="border-b rule px-5 py-4">
     <h1 class="text-sm font-semibold">Captured outbox</h1>
-    <p class="mt-1 max-w-3xl text-xs leading-relaxed text-slate-500">
+    <p class="mt-1 max-w-3xl text-xs leading-relaxed text-[color:var(--muted)]">
       Letters the gateway executed. With the default adapter these were written to the
-      database and to <span class="mono">/data/outbox</span> and <strong>nothing left this
-      machine</strong> &mdash; which is why cloning this repository cannot email a real person.
+ database and to <span class="mono">/data/outbox</span> and <strong>nothing left this
+ machine</strong> &mdash; which is why cloning this repository cannot email a real person.
     </p>
   </div>
   {% if messages %}
-  <ul class="divide-y divide-slate-100">
+  <ul class="divide-y divide-[color:var(--rule)]">
     {% for m in messages %}
     <li class="px-5 py-4">
       <div class="flex flex-wrap items-baseline gap-x-3 text-sm">
         <span class="font-medium">{{ m.subject }}</span>
-        <span class="text-slate-500">to <span class="mono text-xs">{{ m.to_email }}</span></span>
-        <span class="ml-auto text-xs text-slate-400">{{ m.created_at.strftime('%d %b %H:%M:%S') }} · {{ m.adapter }}</span>
+        <span class="text-[color:var(--muted)]">to <span class="mono text-xs">{{ m.to_email }}</span></span>
+        <span class="ml-auto text-xs text-[color:var(--muted)]">{{ m.created_at.strftime('%d %b %H:%M:%S') }} · {{ m.adapter }}</span>
       </div>
-      <div class="sheet mt-2.5 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border rule px-4 py-3">{{ m.body }}</div>
-      {% if m.file_path %}<div class="mono mt-1.5 text-xs text-slate-400">{{ m.file_path }}</div>{% endif %}
+      <div class="sheet mt-2.5 max-h-64 overflow-auto whitespace-pre-wrap border rule px-4 py-3">{{ m.body }}</div>
+      {% if m.file_path %}<div class="mono mt-1.5 text-xs text-[color:var(--muted)]">{{ m.file_path }}</div>{% endif %}
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p class="px-5 py-8 text-sm text-slate-500">Nothing has been sent.</p>
+  <p class="px-5 py-8 text-sm text-[color:var(--muted)]">Nothing has been sent.</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -1,22 +1,28 @@
-{# Connection status for Stripe, Anthropic and the gateway, from /healthz (section 9). #}
+{# Connection status for Stripe, Anthropic and the gateway, from /healthz (section 9).
+   Lives on the Audit page: it is something you go and check, not something to watch all day.
+   The names are the operator's, the raw check payload stays on the tooltip. #}
+{% set DEPENDENCY_NAMES = {
+     'database': 'Database', 'stripe': 'Stripe',
+     'anthropic': 'AI model', 'gateway': 'Sending service'
+   } %}
 <div class="flex flex-wrap items-center gap-1.5 text-xs">
   {% for name, check in health.checks.items() %}
     {% set state = check.status %}
     <span class="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5
-      {% if state == 'ok' %}border-emerald-200 bg-emerald-50/70 text-emerald-900
-      {% elif state == 'not_configured' %}border-slate-200 bg-slate-50 text-slate-600
-      {% else %}border-rose-200 bg-rose-50 text-rose-900{% endif %}"
-      title="{{ check | tojson }}">
+      {% if state == 'ok' %}border-emerald-200 bg-emerald-50/70 text-[color:var(--good)]
+      {% elif state == 'not_configured' %}rule paper text-[color:var(--muted)]
+      {% else %}border-[#efcdc4] bg-[color:var(--stop-bg)] text-[color:var(--stop)]{% endif %}"
+ title="{{ check | tojson }}">
       <span class="h-1.5 w-1.5 rounded-full
-        {% if state == 'ok' %}bg-emerald-500{% elif state == 'not_configured' %}bg-slate-400{% else %}bg-rose-500{% endif %}"></span>
-      {{ name }}{% if state != 'ok' %} · {{ state }}{% endif %}
+        {% if state == 'ok' %}bg-[color:var(--good)]{% elif state == 'not_configured' %}bg-[color:var(--muted)]{% else %}bg-[color:var(--stop-bg)]0{% endif %}"></span>
+      {{ DEPENDENCY_NAMES.get(name, name) }}{% if state != 'ok' %} · {{ state }}{% endif %}
     </span>
   {% endfor %}
   {% if health.checks.stripe.key_kind == 'standard' %}
-    <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-900"
-          title="The read-only split is a stated deliverable. Mint a restricted key (rk_test_...) for STRIPE_API_KEY_READ.">
-      <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-      read key is not restricted
+    <span class="inline-flex items-center gap-1.5 rounded-full border border-[#eddcb8] bg-[color:var(--wait-bg)] px-2 py-0.5 text-[color:var(--wait)]"
+ title="The read-only split is a stated deliverable. Mint a restricted key (rk_test_...) for STRIPE_API_KEY_READ.">
+      <span class="h-1.5 w-1.5 rounded-full bg-[color:var(--wait)]"></span>
+ read key is not restricted
     </span>
   {% endif %}
 </div>

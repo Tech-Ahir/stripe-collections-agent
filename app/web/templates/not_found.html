@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Not found{% endblock %}
 {% block content %}
-<div class="rounded-lg border rule bg-white px-6 py-10 text-center">
+<div class="border rule card px-6 py-10 text-center">
   <h1 class="text-base font-semibold">Not found</h1>
-  <p class="mt-1.5 text-sm text-slate-600">There is no {{ what }}.</p>
-  <a class="mt-4 inline-block text-sm text-blue-700 hover:underline" href="/">Back to the dashboard</a>
+  <p class="mt-1.5 text-sm text-[color:var(--muted)]">There is no {{ what }}.</p>
+  <a class="mt-4 inline-block text-sm link" href="/">Back to the dashboard</a>
 </div>
 {% endblock %}

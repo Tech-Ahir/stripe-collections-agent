@@ -1,31 +1,86 @@
-{# One transcript entry, rendered by type (section 9). #}
+{# One entry in the transcript (section 9).
+
+   Every row carries both layers: what happened, in the words of the person working the
+ queue, and the identifier underneath for anyone matching this screen against the tool
+ code. Nothing is summarised away -- the raw arguments and the raw result are one
+ disclosure click from where they were. #}
+
+{% set TOOL_NAMES = {
+     'list_overdue_invoices': 'Listed overdue invoices',
+     'get_payment_history': 'Checked payment history',
+     'get_invoice': 'Looked up an invoice',
+     'get_customer': 'Looked up a customer',
+     'propose_collection_letter': 'Wrote a letter'
+   } %}
+{# Tool refusals an operator will actually meet. Anything else falls through to the raw
+ code, so a new failure mode is never quietly softened into reassuring words. #}
+{% set REFUSALS = {
+     'duplicate_pending_proposal': 'already queued — a letter for this invoice was already waiting',
+     'proposal_cap_reached': 'stopped — this run had already written its maximum letters',
+     'letter_failed_compliance': 'rejected — the draft broke a compliance rule',
+     'missing_required_fact': 'rejected — the draft was missing a fact it has to state',
+     'invoice_not_found': 'that invoice could not be found'
+   } %}
+
+{% macro answer(result_step) %}
+  {% set failed = result_step.payload.is_error %}
+  {% set code = result_step.payload.result.error if failed and result_step.payload.result is mapping else none %}
+  <details class="mt-1 min-w-0">
+    <summary class="cursor-pointer text-xs hover:underline {% if failed %}text-[color:var(--wait)]{% else %}text-[color:var(--muted)]{% endif %}">
+      {% if failed %}{{ REFUSALS.get(code, 'the tool refused it') }}{% else %}what came back{% endif %}
+      {% if code %}<span class="mono text-[color:var(--muted)]">· {{ code }}</span>{% endif %}
+    </summary>
+    <pre class="mono mt-1.5 max-h-64 overflow-auto paper p-2 text-xs text-[color:var(--muted)]">{{ result_step.payload.result | tojson(indent=2) }}</pre>
+  </details>
+{% endmacro %}
+
 <li class="px-5 py-3 text-sm">
 {% if step.type == 'thought' %}
-  <div class="eyebrow">reasoning</div>
-  <p class="mt-1 text-slate-700">{{ step.payload.text }}</p>
+  {% set long = step.payload.text | length > 420 %}
+  <div class="eyebrow">thinking</div>
+  <div class="thought">
+    <p class="mt-1 text-[color:var(--ink)] {% if long %}clamped{% endif %}">{{ step.payload.text }}</p>
+    {% if long %}
+    <details class="more">
+      <summary class="mt-1 cursor-pointer text-xs text-[color:var(--muted)] hover:text-[color:var(--ink)]">Show the rest</summary>
+    </details>
+    {% endif %}
+  </div>
 
 {% elif step.type == 'message' %}
-  <div class="eyebrow {% if step.payload.kind == 'guardrail' %}text-rose-700{% endif %}">
-    {% if step.payload.kind == 'guardrail' %}guardrail{% else %}summary{% endif %}
-  </div>
-  <p class="mt-1 whitespace-pre-wrap {% if step.payload.kind == 'guardrail' %}text-rose-800{% else %}text-slate-800{% endif %}">{{ step.payload.text }}</p>
+  {% if step.payload.kind == 'guardrail' %}
+    <div class="eyebrow text-[color:var(--stop)]">draft rejected</div>
+    <p class="mt-1 whitespace-pre-wrap text-[color:var(--stop)]">{{ step.payload.text }}</p>
+  {% else %}
+    <div class="eyebrow">wrap-up</div>
+    {# The model writes this in Markdown, so it is rendered as Markdown. app/web/markdown.py
+ escapes before it formats. #}
+    <div class="mt-1 leading-relaxed text-[color:var(--ink)]">{{ step.payload.text | summary }}</div>
+  {% endif %}
 
 {% elif step.type == 'tool_call' %}
-  <div class="flex items-baseline gap-2">
+  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
     <span class="rounded px-1.5 text-xs font-semibold
-      {% if step.tool_class == 'READ' %}bg-sky-100 text-sky-900
-      {% elif step.tool_class == 'DRAFT' %}bg-violet-100 text-violet-900
-      {% else %}bg-slate-100 text-slate-700{% endif %}">{{ step.tool_class }}</span>
-    <span class="mono text-slate-900">{{ step.tool_name }}</span>
+      {% if step.tool_class == 'READ' %}bg-[#e5edf4] text-[#22506f]
+      {% elif step.tool_class == 'DRAFT' %}bg-[#efe8f2] text-[#59406a]
+      {% else %}paper text-[color:var(--ink)]{% endif %}"><svg class="i i-sm mr-1" aria-hidden="true"><use href="#{{ 'i-eye' if step.tool_class == 'READ' else 'i-pen' }}"/></svg>{{ step.tool_class }}</span>
+    <span class="font-medium text-[color:var(--ink)]">{{ TOOL_NAMES.get(step.tool_name, step.tool_name) }}</span>
+    {% if step.about %}
+      <span class="text-[color:var(--muted)]">
+        {{ step.about.customer or '' }}{% if step.about.invoice %} · {{ step.about.invoice }}{% endif %}{% if step.about.amount %} · {{ step.about.amount }}{% endif %}{% if step.about.tone %} · {{ step.about.tone }}{% endif %}
+      </span>
+    {% endif %}
   </div>
-  <pre class="mt-1.5 overflow-x-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.arguments | tojson }}</pre>
+  <div class="mono mt-0.5 text-xs text-[color:var(--muted)]">{{ step.tool_name }}</div>
+  <div class="answers mt-1 flex min-w-0 flex-wrap gap-x-5">
+    <details class="min-w-0">
+      <summary class="cursor-pointer text-xs text-[color:var(--muted)] hover:text-[color:var(--ink)]">what it sent to the tool</summary>
+      <pre class="mono mt-1.5 overflow-x-auto paper p-2 text-xs text-[color:var(--muted)]">{{ step.payload.arguments | tojson(indent=2) }}</pre>
+    </details>
+    {% if step.answer %}{{ answer(step.answer) }}{% endif %}
+  </div>
 
 {% else %}
-  <details class="border-l-2 border-slate-100 pl-3">
-    <summary class="cursor-pointer text-xs hover:underline {% if step.payload.is_error %}text-rose-700{% else %}text-slate-500{% endif %}">
-      {% if step.payload.is_error %}refused{% else %}result{% endif %} · {{ step.tool_name }}
-    </summary>
-    <pre class="mt-1.5 max-h-64 overflow-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">{{ step.payload.result | tojson(indent=2) }}</pre>
-  </details>
+  <div class="border-l-2 rule pl-3">{{ answer(step) }}</div>
 {% endif %}
 </li>

@@ -95,7 +95,74 @@ def list_runs(*, limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
         return [_run_dict(run, counts.get(run.id, {})) for run in runs]
 
 
-def step_dict(step: RunStep) -> dict[str, Any]:
+def transcript_index(session, run_id: str) -> dict[str, dict[str, Any]]:
+    """Who and what the ids in a transcript refer to, taken from the run's own results.
+
+    A tool call carries ids, not names: `get_payment_history` is called with
+    `cus_V88U8Ng76gSGrl`, and seven of those in a row are indistinguishable on screen. The
+    names are already in the transcript -- `list_overdue_invoices` returned them -- so this
+    walks the run's own results and builds the lookup rather than re-reading Stripe.
+
+    Nothing here reaches outside the database, and a missing name simply means the screen
+    keeps showing the id.
+    """
+    index: dict[str, dict[str, Any]] = {"customers": {}, "invoices": {}}
+    steps = session.execute(
+        select(RunStep).where(RunStep.run_id == run_id, RunStep.type == "tool_result")
+    ).scalars()
+    for step in steps:
+        result = (step.payload or {}).get("result")
+        if not isinstance(result, dict):
+            continue
+        rows = result.get("invoices") or result.get("history") or []
+        if isinstance(result.get("invoice"), dict):
+            rows = [*rows, result["invoice"]]
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            invoice_id = row.get("id") or row.get("invoice_id")
+            if invoice_id:
+                # Merge, never replace. The same invoice appears in several results and they
+                # carry different fields: `list_overdue_invoices` knows the customer's name,
+                # `get_payment_history` does not. Assigning the later row wholesale erased
+                # names the run had already established.
+                known = index["invoices"].setdefault(invoice_id, {})
+                for key, value in (
+                    ("number", row.get("number")),
+                    ("customer", row.get("customer_name")),
+                    ("amount", row.get("amount_due_display")),
+                ):
+                    if value and not known.get(key):
+                        known[key] = value
+            if row.get("customer_id") and row.get("customer_name"):
+                index["customers"][row["customer_id"]] = row["customer_name"]
+    return index
+
+
+def _step_about(payload: dict[str, Any], index: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """One line saying what this call was about, in names rather than ids."""
+    arguments = payload.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        return {}
+    about: dict[str, Any] = {}
+
+    customer_id = arguments.get("customer_id")
+    if customer_id:
+        about["customer"] = index["customers"].get(customer_id) or customer_id
+
+    invoice_id = arguments.get("invoice_id")
+    if invoice_id:
+        known = index["invoices"].get(invoice_id, {})
+        about["customer"] = known.get("customer") or about.get("customer")
+        about["invoice"] = known.get("number") or invoice_id
+        about["amount"] = known.get("amount")
+
+    if arguments.get("tone"):
+        about["tone"] = arguments["tone"]
+    return {key: value for key, value in about.items() if value}
+
+
+def step_dict(step: RunStep, index: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     payload = step.payload or {}
     return {
         "seq": step.seq,
@@ -103,6 +170,9 @@ def step_dict(step: RunStep) -> dict[str, Any]:
         "tool_name": step.tool_name,
         "tool_class": payload.get("tool_class"),
         "payload": payload,
+        # Presentation only: names for the ids in `payload`, resolved from this run's own
+        # results. Absent when nothing in the transcript identified them.
+        "about": _step_about(payload, index) if index and step.type == "tool_call" else {},
         "created_at": step.created_at,
     }
 
@@ -129,8 +199,9 @@ def get_run(run_id: str, *, after_seq: int = 0) -> dict[str, Any] | None:
                 .order_by(Proposal.amount_due.desc())
             ).scalars()
         )
+        index = transcript_index(session, run_id)
         detail = _run_dict(run, counts)
-        detail["transcript"] = [step_dict(step) for step in steps]
+        detail["transcript"] = [step_dict(step, index) for step in steps]
         detail["proposal_ids"] = proposal_ids
         return detail
 
@@ -138,8 +209,9 @@ def get_run(run_id: str, *, after_seq: int = 0) -> dict[str, Any] | None:
 def steps_after(run_id: str, after_seq: int) -> list[dict[str, Any]]:
     """The tail of a transcript. This is what the SSE endpoint polls."""
     with session_scope() as session:
+        index = transcript_index(session, run_id)
         return [
-            step_dict(step)
+            step_dict(step, index)
             for step in session.execute(
                 select(RunStep)
                 .where(RunStep.run_id == run_id, RunStep.seq > after_seq)

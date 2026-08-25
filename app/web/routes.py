@@ -35,11 +35,17 @@ from app.api import queries
 from app.config import settings
 from app.runner import start_run
 from app.services import proposals as proposal_service
+from app.web.markdown import render as render_summary
+from shared.clock import now_utc
 from shared.errors import ApiError
 
 log = logging.getLogger("app.web")
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+# The agent writes its closing summary in Markdown. Rendering it is presentation, and the
+# renderer escapes before it formats -- see app/web/markdown.py.
+TEMPLATES.env.filters["summary"] = render_summary
 router = APIRouter(include_in_schema=False)
 
 
@@ -48,8 +54,6 @@ def _base(request: Request, **extra: Any) -> dict[str, Any]:
     context = {
         "request": request,
         "counters": queries.proposal_counters(),
-        "operator": config.operator_id,
-        "model": config.anthropic_model,
         "unapproved_demo": config.enable_unapproved_attempt_demo,
     }
     context.update(extra)
@@ -73,6 +77,9 @@ def dashboard(request: Request) -> HTMLResponse:
             # Section 9's fourth counter. None when Stripe could not be asked, which the
             # template renders as a dash rather than a misleading zero.
             overdue=queries.overdue_invoice_count(),
+            # The counters are cut at midnight UTC, so the date heading is the UTC date.
+            # Otherwise "Approved today" and the date above it disagree for part of the day.
+            today=now_utc(),
         ),
     )
 
@@ -87,17 +94,42 @@ async def health_fragment(request: Request) -> HTMLResponse:
     )
 
 
+def _whole_number(raw: str, *, default: int, low: int, high: int) -> int:
+    """A count typed into a form, coerced rather than rejected.
+
+    These two fields are whole numbers: days, and letters. A browser's number input still
+    lets someone type `1.5` or `1e3` and submit it, and parsing that as `int` used to answer
+    the operator with a raw 422 page from the API's validation layer -- the wrong audience
+    entirely, for a form this UI rendered itself.
+
+    `/v1` keeps its strict validation; this is the HTML form, so a typo lands on the default
+    and the run still starts. Nothing here can widen the run: `high` clamps it.
+    """
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        try:
+            # "1.5" means the person wanted a number; take the whole part rather than
+            # throwing their whole submission away.
+            value = int(float(str(raw).strip()))
+        except (TypeError, ValueError):
+            return default
+    return max(low, min(high, value))
+
+
 @router.post("/ui/runs")
 def start_run_form(
     goal: str = Form(default=""),
-    min_days_overdue: int = Form(default=1),
-    max_proposals: int = Form(default=0),
+    min_days_overdue: str = Form(default="1"),
+    max_proposals: str = Form(default=""),
 ) -> RedirectResponse:
+    config = settings()
+    cap = config.max_proposals_per_run
     started = start_run(
-        settings=settings(),
+        settings=config,
         goal=goal,
-        min_days_overdue=max(0, min_days_overdue),
-        max_proposals=max_proposals or None,
+        min_days_overdue=_whole_number(min_days_overdue, default=1, low=0, high=3650),
+        max_proposals=_whole_number(max_proposals, default=cap, low=1, high=cap),
     )
     return RedirectResponse(url=f"/runs/{started['run_id']}", status_code=303)
 
@@ -107,6 +139,33 @@ def start_run_form(
 # ----------------------------------------------------------------------------------
 
 
+def _fold_results_into_calls(transcript: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per tool call, with the answer tucked inside it.
+
+    A call and its result are two steps, and rendering them as two rows doubled the length of
+    every transcript: seven payment-history lookups became fourteen rows, half of them saying
+    only "result". They are paired by adjacency, which is how the loop writes them.
+
+    Presentation only, and deliberately not done in ``app.api.queries``: ``/v1`` publishes
+    every step the run recorded, and dropping rows from that would be a breaking change to
+    the API and a smaller transcript than the one the brief asks for.
+    """
+    rows: list[dict[str, Any]] = []
+    for step in transcript:
+        answers_the_row_above = (
+            step["type"] == "tool_result"
+            and rows
+            and rows[-1]["type"] == "tool_call"
+            and rows[-1]["tool_name"] == step["tool_name"]
+            and "answer" not in rows[-1]
+        )
+        if answers_the_row_above:
+            rows[-1] = {**rows[-1], "answer": step}
+        else:
+            rows.append(step)
+    return rows
+
+
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 def run_detail(request: Request, run_id: str) -> HTMLResponse:
     detail = queries.get_run(run_id)
@@ -114,6 +173,7 @@ def run_detail(request: Request, run_id: str) -> HTMLResponse:
         return TEMPLATES.TemplateResponse(
             request, "not_found.html", _base(request, what=f"run {run_id}"), status_code=404
         )
+    detail = {**detail, "transcript": _fold_results_into_calls(detail["transcript"])}
     proposals = queries.list_proposals(status=None, run_id=run_id)
     return TEMPLATES.TemplateResponse(
         request, "run_detail.html", _base(request, run=detail, proposals=proposals)

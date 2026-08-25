@@ -15,6 +15,7 @@ two are wired together for real by scripts/demo_boundary.py.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,6 +29,7 @@ from shared.models import Approval, AuditEvent, Proposal
 from tests.factories import letter_payload, make_proposal
 
 SECRET = "x" * 64
+TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "app" / "web" / "templates"
 
 
 class StubGateway:
@@ -541,13 +543,47 @@ def test_the_run_screen_footnotes_the_absent_action_chip(api):
     assert "READ" in page and "DRAFT" in page
 
 
+def test_an_untouched_letter_is_approved_exactly_as_drafted(api, pending, monkeypatch):
+    """The letter reads as a letter until you click Edit, and that is load-bearing.
+
+    HTMX sends named fields only, so the textarea carries no `name` until editing starts.
+    An operator who approves without touching it therefore posts no body at all, and the
+    stored draft is what gets hashed and sent -- no edit event, no new fingerprint.
+    """
+    import re
+
+    page = api.get(f"/proposals?selected={pending}").text
+    textarea = re.search(r"<textarea[^>]*id=\"letter-body\"[^>]*>", page).group(0)
+    assert "name=" not in textarea, "an unedited letter must not post a body"
+    assert 'id="letter-read"' in page, "the letter is shown as text, not as a form field"
+
+    # The control that grants the name has to be wired up. This shipped once with the
+    # markup present and the script missing: the button rendered and did nothing, which
+    # no assertion about the markup alone would have caught.
+    assert 'id="edit-letter"' in page and 'id="save-letter"' in page
+    assert 'getElementById("edit-letter")' in page, "the Edit letter button must be wired"
+    assert 'body.name = "body"' in page, "clicking Edit is what names the field"
+
+    gateway = stub_into(monkeypatch, StubGateway())
+    api.post(f"/ui/proposals/{pending}/approve", data={"note": ""})
+
+    with session_scope() as session:
+        proposal = session.get(Proposal, pending)
+        # "approved", not "executed": the gateway is stubbed here, and only the real one
+        # writes the execution back.
+        assert proposal.status == "approved"
+        edits = session.query(AuditEvent).filter_by(event="proposal.edited").count()
+        assert edits == 0, "approving without editing must not record an edit"
+        assert gateway.calls[0]["payload_hash"] == proposal.payload_hash
+
+
 def test_the_queue_screen_offers_the_unapproved_send_button(api, pending):
     page = api.get("/proposals").text
     assert "Try to send without approval" in page
     assert f"/ui/proposals/{pending}/attempt-unapproved" in page
 
 
-def test_the_header_flags_a_non_restricted_stripe_key(api, monkeypatch):
+def test_the_connection_strip_flags_a_non_restricted_stripe_key(api, monkeypatch):
     """The read-only split is a stated deliverable, so the gap is visible, not hidden."""
     from app import config as app_config
 
@@ -559,11 +595,91 @@ def test_the_header_flags_a_non_restricted_stripe_key(api, monkeypatch):
         app_config.settings.cache_clear()
 
 
+def test_the_audit_screen_is_where_connections_are_checked(api):
+    """The strip moved off the header: it is something you go and look at, not a watchdog.
+
+    Asserting the mount rather than the rendered chips, because HTMX fetches the fragment
+    client-side and a server-rendered test would pass on a page that shows nothing.
+    """
+    page = api.get("/audit").text
+    assert 'hx-get="/ui/health"' in page
+    assert "Connections" in page
+    assert 'hx-get="/ui/health"' not in api.get("/").text, "the dashboard header no longer polls"
+
+
 def test_a_scripted_run_is_badged_so_it_cannot_pass_for_a_model_run(api):
     from app.store.repositories import RunStore
 
     RunStore.create(goal="[SCRIPTED FIXTURE]", operator_id="op", params={"scripted": True})
-    assert "scripted fixture" in api.get("/").text
+    assert "example run" in api.get("/").text
+
+
+def test_wide_tool_output_is_contained_rather_than_widening_the_page(api):
+    """A tool result is one unbroken line of JSON, and it broke the layout when opened.
+
+    Every disclosure on the transcript hides a `<pre>` with no natural width limit. Opened,
+    it pushed the card past the window and gave the whole page a horizontal scrollbar --
+    which an earlier width measurement missed entirely, because it measured the page with
+    every disclosure shut.
+
+    Two things have to hold together: the `<pre>` caps itself, and the column it lives in is
+    allowed to shrink. A grid child defaults to `min-width: auto`, so without the second the
+    first has nothing to cap against.
+    """
+    from app.store.repositories import RunStore
+
+    shell = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
+    assert "pre { max-width: 100%; overflow-x: auto; }" in shell, "wide content scrolls itself"
+
+    run_id = RunStore.create(goal="g", operator_id="op", params={})
+    page = api.get(f"/runs/{run_id}").text
+    transcript_section = page[page.index("What it did") - 400 : page.index("What it did")]
+    assert "min-w-0" in transcript_section, "the transcript column must be allowed to shrink"
+
+
+# ----------------------------------------------------------------------------------
+# The two numbers on the dashboard form
+# ----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        ("7", 7),  # the ordinary case
+        ("1.5", 1),  # a number input still lets this be typed and submitted
+        ("1e3", 1000),  # so does this
+        ("abc", 1),  # nonsense falls back to the default rather than 422
+        ("", 1),  # cleared field
+        ("-3", 0),  # clamped, not rejected
+        ("99999", 3650),  # clamped at the top
+    ],
+)
+def test_days_typed_into_the_form_never_answer_with_a_validation_page(api, typed, expected):
+    """`1.5` used to reach the operator as a raw 422 from the API's validation layer.
+
+    It is a form this UI rendered, so a typo starts a run with a sensible number instead.
+    """
+    from app.web.routes import _whole_number
+
+    assert _whole_number(typed, default=1, low=0, high=3650) == expected
+
+    response = api.post(
+        "/ui/runs",
+        data={"goal": "", "min_days_overdue": typed, "max_proposals": "10"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303, "the form always redirects to the run it started"
+
+
+def test_the_letter_cap_cannot_be_widened_from_the_form(api):
+    """The form may lower the cap for one run. It must never raise it above the setting."""
+    from app.config import settings as app_settings
+    from app.web.routes import _whole_number
+
+    cap = app_settings().max_proposals_per_run
+    assert _whole_number("99999", default=cap, low=1, high=cap) == cap
+    assert _whole_number("0", default=cap, low=1, high=cap) == 1
+    assert _whole_number("", default=cap, low=1, high=cap) == cap
 
 
 # ----------------------------------------------------------------------------------
@@ -581,19 +697,18 @@ def test_the_panel_after_a_send_lists_the_seven_checks(api, pending, monkeypatch
     panel = api.post(f"/ui/proposals/{pending}/approve", data={"note": "", "body": ""}).text
 
     assert "The seven checks that had to pass" in panel
-    for number, name in enumerate(
-        [
-            "hmac_signature_valid",
-            "token_not_expired",
-            "nonce_unused",
-            "proposal_is_approved",
-            "approval_matches_approver",
-            "payload_hash_matches",
-            "idempotency_key_unused",
-        ],
-        start=1,
+    # Both layers on every row: the sentence, and the name the check has in the code.
+    assert "A person approved this letter" in panel
+    for name in (
+        "hmac_signature_valid",
+        "token_not_expired",
+        "nonce_unused",
+        "proposal_is_approved",
+        "approval_matches_approver",
+        "payload_hash_matches",
+        "idempotency_key_unused",
     ):
-        assert f"{number}. {name}" in panel
+        assert name in panel, "the identifier stays on screen next to the sentence"
 
 
 def test_the_panel_after_a_refusal_shows_the_code_and_how_far_it_got(api, pending, monkeypatch):
@@ -621,14 +736,15 @@ def test_the_unapproved_attempt_panel_makes_the_point_of_the_architecture(
 def test_the_panel_after_an_edit_shows_both_hashes(api, pending):
     panel = api.post(f"/ui/proposals/{pending}/edit", data={"body": "Rewritten by hand."}).text
 
-    assert "Edit saved." in panel
+    assert "Your changes are saved" in panel
     assert "was" in panel and "now" in panel
 
 
 def test_the_panel_after_a_rejection_says_it_is_terminal(api, pending):
     panel = api.post(f"/ui/proposals/{pending}/reject", data={"note": "already paid"}).text
 
-    assert "recorded" in panel
+    assert "Rejected" in panel
+    assert "nothing can send this letter now" in panel
     assert "not_approved" in panel
 
 
@@ -648,8 +764,8 @@ def test_the_run_proposal_fragment_renders(api):
         make_proposal(session, run=run, status="pending")
 
     panel = api.get(f"/ui/runs/{run_id}/proposals").text
-    assert "awaiting approval" in panel
-    assert "review" in panel
+    assert "waiting for you" in panel
+    assert "Read and decide" in panel
 
 
 # ----------------------------------------------------------------------------------

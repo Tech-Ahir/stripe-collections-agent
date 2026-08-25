@@ -1,14 +1,27 @@
+{# A run's state, in the words the person working the queue would use, set as a ruled tag.
+   The identifier is one hover away, and the audit log and the API keep it verbatim. #}
+{% set RUN_STATES = {
+     'queued': 'waiting to start',
+     'running': 'working',
+     'awaiting_approval': 'letters ready for you',
+     'completed': 'finished',
+     'failed': 'stopped'
+   } %}
 {% set s = run.status %}
-<span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium
-  {% if s == 'running' %}bg-blue-50 text-blue-900
-  {% elif s == 'awaiting_approval' %}bg-amber-50 text-amber-900
-  {% elif s == 'completed' %}bg-emerald-50 text-emerald-900
-  {% elif s == 'failed' %}bg-rose-50 text-rose-900
-  {% else %}bg-slate-100 text-slate-700{% endif %}">
-  {% if s == 'running' %}<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500"></span>{% endif %}
-  {{ s.replace('_', ' ') }}
+<span class="tag
+  {% if s == 'awaiting_approval' %}tag-wait
+  {% elif s == 'completed' %}tag-good
+  {% elif s == 'failed' %}tag-stop
+  {% else %}tag-flat{% endif %}"
+  title="status: {{ s }}">
+  {% set MARKS = {
+       'queued': 'i-clock', 'running': 'i-clock', 'awaiting_approval': 'i-letter',
+       'completed': 'i-check', 'failed': 'i-stop'
+     } %}
+  <svg class="i i-sm {% if s == 'running' %}animate-pulse{% endif %}" aria-hidden="true"><use href="#{{ MARKS.get(s, 'i-clock') }}"/></svg>
+  {{ RUN_STATES.get(s, s.replace('_', ' ')) }}
 </span>
 {% if run.params and run.params.get('scripted') %}
-<span class="ml-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-500"
-      title="Produced by scripts/dev_seed_run.py. No model was called.">scripted fixture</span>
+<span class="tag tag-flat ml-1 border-dashed"
+      title="Produced by scripts/dev_seed_run.py. No model was called.">example run &mdash; no AI used</span>
 {% endif %}

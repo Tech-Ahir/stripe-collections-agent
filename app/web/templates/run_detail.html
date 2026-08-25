@@ -3,29 +3,31 @@
 {% block content %}
 
 <div class="mb-4 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-  <h1 class="text-sm font-semibold">Run <span class="mono">{{ run.id[:8] }}…</span></h1>
+  <h1 class="text-sm font-semibold" title="run {{ run.id }}">
+    Check from {{ run.started_at.strftime('%d %b, %H:%M') }}
+  </h1>
   <span id="run-status">{% include "partials/run_status.html" %}</span>
-  <span class="text-xs text-slate-500">
-    <span id="tool-count" class="tabular-nums font-medium text-slate-700">{{ run.tool_calls }}</span> tool calls ·
-    <span id="proposal-count" class="tabular-nums font-medium text-slate-700">{{ run.proposals }}</span> proposals
+  <span class="text-xs text-[color:var(--muted)]">
+    <span id="tool-count" class="tabular-nums font-medium text-[color:var(--ink)]">{{ run.tool_calls }}</span> steps ·
+    <span id="proposal-count" class="tabular-nums font-medium text-[color:var(--ink)]">{{ run.proposals }}</span> letters
   </span>
   {% if run.pending_proposals %}
-    <a href="/proposals" class="ml-auto rounded-md bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600">
-      Review {{ run.pending_proposals }} in the queue &rarr;
+    <a href="/proposals" class="ml-auto bg-[color:var(--wait)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#6f4810]">
+      Review {{ run.pending_proposals }} letters &rarr;
     </a>
   {% endif %}
 </div>
 
-<div class="mb-4 rounded-lg border rule bg-white px-5 py-3.5">
-  <div class="eyebrow">Goal</div>
-  <p class="mt-1 max-w-4xl text-sm leading-relaxed text-slate-800">{{ run.goal }}</p>
+<div class="mb-4 border rule card px-5 py-3.5">
+  <div class="eyebrow">What it looked for</div>
+  <p class="mt-1 max-w-4xl text-sm leading-relaxed text-[color:var(--ink)]">{{ run.goal }}</p>
 </div>
 
 {% if run.error %}
-<div class="mb-4 rounded-lg border border-rose-300 bg-rose-50 px-5 py-3.5 text-sm text-rose-950">
-  <strong class="font-semibold">The run stopped.</strong> {{ run.error }}
-  <div class="mt-1 text-xs text-rose-700">
-    The transcript below is what it completed before stopping.
+<div class="mb-4 border border-[#efcdc4] bg-[color:var(--stop-bg)] px-5 py-3.5 text-sm text-[color:var(--stop)]">
+  <strong class="font-semibold">This check stopped early.</strong> {{ run.error }}
+  <div class="mt-1 text-xs text-[color:var(--stop)]">
+    Everything below is what it finished. Nothing was sent.
   </div>
 </div>
 {% endif %}
@@ -33,43 +35,54 @@
 <div class="grid gap-6 lg:grid-cols-3">
 
   {# --- The transcript ---------------------------------------------------------- #}
-  <section class="rounded-lg border rule bg-white lg:col-span-2">
+  <section class="card min-w-0 border rule lg:col-span-2">
     <div class="border-b rule px-5 py-3.5">
-      <h2 class="text-sm font-semibold">Transcript</h2>
-      <p class="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
-        Every tool call the agent made, in the order it chose. Each carries a
-        <span class="rounded bg-sky-100 px-1 font-semibold text-sky-900">READ</span> or
-        <span class="rounded bg-violet-100 px-1 font-semibold text-violet-900">DRAFT</span> chip.
-        <strong>There is no ACTION chip, and its absence is the point:</strong> the agent has
-        no tool that reaches the outside world.
+      <h2 class="text-sm font-semibold">What it did</h2>
+      <p class="mt-1 max-w-2xl text-xs leading-relaxed text-[color:var(--muted)]">
+        Every step in the order the agent chose it. Nothing here is a fixed script.
       </p>
     </div>
 
-    <ol id="transcript" class="divide-y divide-slate-100">
+    <ol id="transcript" class="divide-y divide-[color:var(--rule)]">
       {% for step in run.transcript %}
         {% include "partials/step.html" %}
       {% endfor %}
     </ol>
 
-    <div id="stream-end" class="border-t rule px-5 py-3 text-xs text-slate-500">
+    <div id="stream-end" class="border-t rule px-5 py-3 text-xs text-[color:var(--muted)]">
       {% if run.status in ('queued', 'running') %}
-        <span class="animate-pulse">watching for the next step…</span>
+        <span class="inline-flex items-center gap-2">
+          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--link)]"></span>
+          Working… this page updates itself.
+        </span>
       {% else %}
-        End of transcript.
+        That&rsquo;s everything.
       {% endif %}
     </div>
+
+    {# Section 9 asks for this footnote. It sits at the end rather than the top: it is read
+ once by someone evaluating the architecture, not every morning by the operator. #}
+    <p class="border-t rule px-5 py-3 text-xs leading-relaxed text-[color:var(--muted)]">
+      Each step is either
+      <span class="bg-[#e5edf4] px-1 font-semibold text-[#22506f]">READ</span>, looking
+ something up, or
+      <span class="bg-[#efe8f2] px-1 font-semibold text-[#59406a]">DRAFT</span>,
+ writing a letter.
+      <strong class="font-medium text-[color:var(--ink)]">There is no ACTION chip, and its absence is
+ the point:</strong> the agent has no tool that reaches the outside world.
+    </p>
   </section>
 
   {# --- Proposals as they appear ------------------------------------------------- #}
-  <aside class="self-start rounded-lg border rule bg-white">
+  <aside class="card min-w-0 self-start border rule">
     <div class="border-b rule px-5 py-3.5">
-      <h2 class="text-sm font-semibold">Proposals from this run</h2>
-      <p class="mt-1 text-xs leading-relaxed text-slate-500">Each one is waiting for a human. Nothing has been sent.</p>
+      <h2 class="text-sm font-semibold">Letters from this check</h2>
+      <p class="mt-1 text-xs leading-relaxed text-[color:var(--muted)]">Each one is waiting for you. Nothing has been sent.</p>
     </div>
     <div id="run-proposals"
-         hx-get="/ui/runs/{{ run.id }}/proposals"
-         hx-trigger="{% if run.status in ('queued', 'running') %}every 2s{% else %}none{% endif %}"
-         hx-swap="innerHTML">
+ hx-get="/ui/runs/{{ run.id }}/proposals"
+ hx-trigger="{% if run.status in ('queued', 'running') %}every 2s{% else %}none{% endif %}"
+ hx-swap="innerHTML">
       {% include "partials/run_proposals.html" %}
     </div>
   </aside>
@@ -79,71 +92,127 @@
 // The transcript streams over SSE. The endpoint tails the database, so `after` lets a
 // reconnecting browser resume exactly where it left off with nothing lost.
 (function () {
-  const list = document.getElementById("transcript");
-  const endMarker = document.getElementById("stream-end");
-  const status = "{{ run.status }}";
-  if (status !== "queued" && status !== "running") return;
+ const list = document.getElementById("transcript");
+ const endMarker = document.getElementById("stream-end");
+ const status = "{{ run.status }}";
+ if (status !== "queued" && status !== "running") return;
 
-  let lastSeq = {{ run.transcript | length and run.transcript[-1].seq or 0 }};
-  const source = new EventSource("/v1/runs/{{ run.id }}/stream?after=" + lastSeq);
+ let lastSeq = {{ run.transcript | length and run.transcript[-1].seq or 0 }};
+ const source = new EventSource("/v1/runs/{{ run.id }}/stream?after=" + lastSeq);
 
-  const CHIP = { READ: "bg-sky-100 text-sky-900", DRAFT: "bg-violet-100 text-violet-900" };
+ const CHIP = { READ: "bg-[#e5edf4] text-[#22506f]", DRAFT: "bg-[#efe8f2] text-[#59406a]" };
 
-  function escapeHtml(value) {
-    const div = document.createElement("div");
-    div.textContent = value == null ? "" : String(value);
-    return div.innerHTML;
+ function escapeHtml(value) {
+ const div = document.createElement("div");
+ div.textContent = value == null ? "" : String(value);
+ return div.innerHTML;
   }
 
-  source.addEventListener("step", function (message) {
-    const step = JSON.parse(message.data);
-    lastSeq = step.seq;
-    const item = document.createElement("li");
-    item.className = "px-5 py-3 text-sm";
+  // Built to match partials/step.html, so a step looks the same whether it arrived live or
+  // was rendered on page load. `about` comes from the same read model the server used.
+ const TOOL_NAMES = {
+ list_overdue_invoices: "Listed overdue invoices",
+ get_payment_history: "Checked payment history",
+ get_invoice: "Looked up an invoice",
+ get_customer: "Looked up a customer",
+ propose_collection_letter: "Wrote a letter",
+  };
+ const REFUSALS = {
+ duplicate_pending_proposal: "already queued — a letter for this invoice was already waiting",
+ proposal_cap_reached: "stopped — this run had already written its maximum letters",
+ letter_failed_compliance: "rejected — the draft broke a compliance rule",
+ missing_required_fact: "rejected — the draft was missing a fact it has to state",
+ invoice_not_found: "that invoice could not be found",
+  };
 
-    if (step.type === "thought") {
-      item.innerHTML =
-        '<div class="eyebrow">reasoning</div>' +
-        '<p class="mt-1 text-slate-700">' + escapeHtml(step.payload.text) + "</p>";
+  // The row a live result belongs to. Mirrors _fold_results_into_calls in app/web/routes.py,
+  // so a check being watched live looks like the same check read afterwards.
+ let openCall = null;
+
+ function answerHtml(step) {
+ const failed = step.payload.is_error;
+ const code = failed && step.payload.result ? step.payload.result.error : null;
+ const label = failed ? REFUSALS[code] || "the tool refused it" : "what came back";
+ return (
+      '<details class="mt-1"><summary class="cursor-pointer text-xs hover:underline ' +
+      (failed ? "text-[color:var(--wait)]" : "text-[color:var(--muted)]") + '">' + escapeHtml(label) +
+      (code ? ' <span class="mono text-[color:var(--muted)]">· ' + escapeHtml(code) + "</span>" : "") +
+      '</summary><pre class="mono mt-1.5 max-h-64 overflow-auto paper p-2 text-xs text-[color:var(--muted)]">' +
+ escapeHtml(JSON.stringify(step.payload.result, null, 2)) + "</pre></details>"
+    );
+  }
+
+ function aboutLine(about) {
+ if (!about) return "";
+ const parts = [about.customer, about.invoice, about.amount, about.tone].filter(Boolean);
+ return parts.length ? '<span class="text-[color:var(--muted)]">' + escapeHtml(parts.join(" · ")) + "</span>" : "";
+  }
+
+ source.addEventListener("step", function (message) {
+ const step = JSON.parse(message.data);
+ lastSeq = step.seq;
+ const item = document.createElement("li");
+ item.className = "px-5 py-3 text-sm";
+
+ if (step.type === "thought") {
+ const long = (step.payload.text || "").length > 420;
+ item.innerHTML =
+        '<div class="eyebrow">thinking</div><div class="thought">' +
+        '<p class="mt-1 text-[color:var(--ink)]' + (long ? " clamped" : "") + '">' +
+ escapeHtml(step.payload.text) + "</p>" +
+        (long
+          ? '<details class="more"><summary class="mt-1 cursor-pointer text-xs text-[color:var(--muted)] hover:text-[color:var(--ink)]">Show the rest</summary></details>'
+          : "") +
+        "</div>";
     } else if (step.type === "message") {
-      item.innerHTML =
-        '<div class="eyebrow">summary</div>' +
-        '<p class="mt-1 whitespace-pre-wrap text-slate-800">' + escapeHtml(step.payload.text) + "</p>";
+ const guardrail = step.payload.kind === "guardrail";
+ item.innerHTML =
+        '<div class="eyebrow' + (guardrail ? " text-[color:var(--stop)]" : "") + '">' +
+        (guardrail ? "draft rejected" : "wrap-up") + "</div>" +
+        '<p class="mt-1 whitespace-pre-wrap ' + (guardrail ? "text-[color:var(--stop)]" : "text-[color:var(--ink)]") +
+        '">' + escapeHtml(step.payload.text) + "</p>";
     } else if (step.type === "tool_call") {
-      const chip = CHIP[step.tool_class] || "bg-slate-100 text-slate-700";
-      item.innerHTML =
-        '<div class="flex items-baseline gap-2">' +
-        '<span class="rounded px-1.5 text-xs font-semibold ' + chip + '">' + escapeHtml(step.tool_class) + "</span>" +
-        '<span class="mono text-slate-900">' + escapeHtml(step.tool_name) + "</span></div>" +
-        '<pre class="mt-1.5 overflow-x-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">' +
-        escapeHtml(JSON.stringify(step.payload.arguments)) + "</pre>";
+ const chip = CHIP[step.tool_class] || "paper text-[color:var(--ink)]";
+ const name = TOOL_NAMES[step.tool_name] || step.tool_name;
+ item.innerHTML =
+        '<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">' +
+        '<span class="rounded px-1.5 text-xs font-semibold ' + chip + '">' +
+ escapeHtml(step.tool_class) + "</span>" +
+        '<span class="font-medium text-[color:var(--ink)]">' + escapeHtml(name) + "</span>" +
+ aboutLine(step.about) + "</div>" +
+        '<div class="mono mt-0.5 text-xs text-[color:var(--muted)]">' + escapeHtml(step.tool_name) + "</div>" +
+        '<div class="answers mt-1 flex flex-wrap gap-x-5"><details>' +
+        '<summary class="cursor-pointer text-xs text-[color:var(--muted)] hover:text-[color:var(--ink)]">' +
+        "what it sent to the tool</summary>" +
+        '<pre class="mono mt-1.5 overflow-x-auto paper p-2 text-xs text-[color:var(--muted)]">' +
+ escapeHtml(JSON.stringify(step.payload.arguments, null, 2)) + "</pre></details></div>";
+ openCall = { element: item, tool: step.tool_name };
     } else {
-      const failed = step.payload.is_error;
-      item.innerHTML =
-        '<details class="border-l-2 border-slate-100 pl-3">' +
-        '<summary class="cursor-pointer text-xs hover:underline ' +
-        (failed ? "text-rose-700" : "text-slate-500") + '">' +
-        (failed ? "refused" : "result") + " · " + escapeHtml(step.tool_name) + "</summary>" +
-        '<pre class="mt-1.5 max-h-64 overflow-auto rounded-md bg-slate-50 p-2 text-xs text-slate-600">' +
-        escapeHtml(JSON.stringify(step.payload.result, null, 2)) + "</pre></details>";
+ if (openCall && openCall.tool === step.tool_name) {
+ openCall.element.querySelector(".answers").innerHTML += answerHtml(step);
+ openCall = null;
+ endMarker.scrollIntoView({ behavior: "smooth", block: "end" });
+ return;
+      }
+ item.innerHTML = '<div class="border-l-2 rule pl-3">' + answerHtml(step) + "</div>";
     }
-    list.appendChild(item);
-    endMarker.scrollIntoView({ behavior: "smooth", block: "end" });
+ if (step.type !== "tool_call") openCall = null;
+ list.appendChild(item);
+ endMarker.scrollIntoView({ behavior: "smooth", block: "end" });
   });
 
-  source.addEventListener("done", function (message) {
-    const done = JSON.parse(message.data);
-    source.close();
-    endMarker.textContent =
-      "Run " + done.status.replace(/_/g, " ") + " · " + done.tool_calls +
-      " tool calls · " + done.proposals + " proposals." +
-      (done.proposals ? " Nothing has been sent; review them in the queue." : "");
-    endMarker.className = "border-t rule px-5 py-3 text-xs text-slate-600";
-    setTimeout(function () { window.location.reload(); }, 900);
+ source.addEventListener("done", function (message) {
+ const done = JSON.parse(message.data);
+ source.close();
+ endMarker.textContent =
+      "Finished: " + done.tool_calls + " steps, " + done.proposals + " letters drafted." +
+      (done.proposals ? " Nothing has been sent — they are waiting for you in review." : "");
+ endMarker.className = "border-t rule px-5 py-3 text-xs text-[color:var(--muted)]";
+ setTimeout(function () { window.location.reload(); }, 900);
   });
 
-  source.onerror = function () {
-    endMarker.textContent = "Stream interrupted. Reload to resume from where it stopped.";
+ source.onerror = function () {
+ endMarker.textContent = "The live view dropped. Reload to pick up where it stopped.";
   };
 })();
 </script>
